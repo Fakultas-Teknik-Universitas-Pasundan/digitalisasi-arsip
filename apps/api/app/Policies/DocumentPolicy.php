@@ -135,4 +135,28 @@ class DocumentPolicy
         // SBAP cannot download unverified documents
         return false;
     }
+
+    /**
+     * Determine whether the user can view trashed documents.
+     */
+    public function viewTrashed(User $user): bool
+    {
+        return $user->hasRole('manager');
+    }
+
+    /**
+     * Determine whether the user can restore a soft-deleted document.
+     */
+    public function restore(User $user, Document $document): bool
+    {
+        return $user->hasRole('manager');
+    }
+
+    /**
+     * Determine whether the user can permanently delete a document.
+     */
+    public function forceDelete(User $user, Document $document): bool
+    {
+        return $user->hasRole('manager');
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkActionRequest;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
@@ -47,25 +48,8 @@ class UserController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
-        $query = User::query();
-
-        // Search by name or email
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        // Filter by role
-        if ($request->has('role')) {
-            $query->where('role', $request->input('role'));
-        }
-
-        // Pagination
-        $perPage = $request->input('per_page', 15);
-        $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $users = $this->userService->listUsers($request->all(), $perPage);
 
         return response()->json([
             'message' => 'Daftar pengguna berhasil diambil.',
@@ -282,10 +266,9 @@ class UserController extends Controller
             new OA\Response(response: 422, description: 'Validation Error', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
         ]
     )]
-    public function destroyMultiple(Request $request): JsonResponse
+    public function destroyMultiple(BulkActionRequest $request): JsonResponse
     {
         $request->validate([
-            'ids' => 'required|array',
             'ids.*' => 'exists:users,id',
         ]);
 

@@ -54,6 +54,17 @@ class FileEncryptionService
     }
 
     /**
+     * Check if the binary content has a valid PDF magic signature (%PDF-).
+     *
+     * @param string $content
+     * @return bool
+     */
+    public function hasValidPdfSignature(string $content): bool
+    {
+        return str_starts_with($content, '%PDF-');
+    }
+
+    /**
      * Check if file encryption is enabled.
      *
      * @return bool

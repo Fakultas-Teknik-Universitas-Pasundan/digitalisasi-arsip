@@ -18,10 +18,7 @@ class UserService
      */
     public function createUser(array $data): User
     {
-        // Hash password
-        $data['password'] = Hash::make($data['password']);
-
-        // Create user
+        // Password will be auto-hashed by User model's 'hashed' cast
         $user = User::create($data);
 
         // Log activity
@@ -55,7 +52,7 @@ class UserService
 
         // Check password change
         if (isset($data['password']) && !empty($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
+            // Password will be auto-hashed by User model's 'hashed' cast
             $changedFields[] = 'password';
         } else {
             unset($data['password']);
@@ -160,5 +157,33 @@ class UserService
             'active_users' => $activeUsers,
             'new_users' => $newUsers,
         ];
+    }
+
+    /**
+     * Get paginated list of users with optional filtering.
+     *
+     * @param array $filters
+     * @param int $perPage
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function listUsers(array $filters = [], int $perPage = 15)
+    {
+        $query = User::query();
+
+        // Search by name or email
+        if (!empty($filters['search'])) {
+            $search = addcslashes($filters['search'], '%_\\');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by role
+        if (!empty($filters['role'])) {
+            $query->where('role', $filters['role']);
+        }
+
+        return $query->orderBy('created_at', 'desc')->paginate($perPage);
     }
 }

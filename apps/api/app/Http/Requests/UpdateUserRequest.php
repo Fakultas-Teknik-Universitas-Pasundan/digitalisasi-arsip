@@ -27,7 +27,7 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($userId)],
-            'nip' => ['nullable', 'string', 'max:50'],
+            'nip' => ['nullable', 'string', 'max:50', Rule::unique('users', 'nip')->ignore($userId)],
             'password' => ['nullable', 'string', 'min:8'],
             'role' => ['sometimes', Rule::in(['manager', 'uploader', 'qc', 'sbap'])],
         ];
@@ -46,6 +46,7 @@ class UpdateUserRequest extends FormRequest
             'name.max' => 'Nama pengguna maksimal 255 karakter.',
             'email.email' => 'Format alamat email tidak valid. Contoh: nama@example.com',
             'email.unique' => 'Alamat email sudah digunakan pengguna lain. Gunakan email lain.',
+            'nip.unique' => 'NIP sudah digunakan oleh pengguna lain.',
             'password.string' => 'Password harus berupa teks.',
             'password.min' => 'Password minimal 8 karakter.',
             'role.in' => 'Role harus salah satu dari: manager, uploader, qc, sbap.',

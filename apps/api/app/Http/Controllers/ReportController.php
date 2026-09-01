@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Document;
 use App\Enums\DocumentStatus;
+use App\Http\Requests\GenerateReportRequest;
 use App\Services\ReportService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -55,23 +56,12 @@ class ReportController extends Controller
             ),
         ]
     )]
-    public function generate(Request $request)
+    public function generate(GenerateReportRequest $request)
     {
         $this->authorize('viewAny', AuditLog::class);
 
-        // Validate request
-        $request->validate([
-            'period_start' => 'required|date',
-            'period_end' => 'required|date|after_or_equal:period_start',
-            'format' => 'required|in:pdf,xlsx,csv',
-            'type' => 'required|in:monthly,annual,custom',
-            'style' => 'nullable|in:detailed,summary,executive',
-            'content' => 'nullable|array',
-            'content.*' => 'in:upload_stats,qc_metrics,doc_status,user_activity,trend_analysis'
-        ]);
-
         try {
-            $params = $request->all();
+            $params = $request->validated();
 
             // Generate the report
             return $this->reportService->generate($params);
@@ -140,4 +130,40 @@ class ReportController extends Controller
             ],
         ], 200);
     }
+
+    /**
+     * Get QC verifier performance report with pagination.
+     */
+    #[OA\Get(
+        path: '/api/reports/qc-performance',
+        summary: 'Laporan performa dan efisiensi staf verifikator QC (UC-16) - Manager only',
+        description: 'Mengambil ringkasan statistik dan detail kinerja individual staf QC (jumlah verifikasi, penolakan, akurasi, status online/last seen) dengan paginasi dan filter periode. Hanya dapat diakses oleh Manager.',
+        security: [['cookieAuth' => []]],
+        tags: ['Reports'],
+        parameters: [
+            new OA\Parameter(name: 'start_date', in: 'query', description: 'Tanggal awal periode (YYYY-MM-DD)', required: false, schema: new OA\Schema(type: 'string', format: 'date', example: '2026-01-01')),
+            new OA\Parameter(name: 'end_date', in: 'query', description: 'Tanggal akhir periode (YYYY-MM-DD)', required: false, schema: new OA\Schema(type: 'string', format: 'date', example: '2026-08-18')),
+            new OA\Parameter(name: 'per_page', in: 'query', description: 'Jumlah verifikator per halaman (default 10)', required: false, schema: new OA\Schema(type: 'integer', example: 10)),
+            new OA\Parameter(name: 'page', in: 'query', description: 'Nomor halaman (default 1)', required: false, schema: new OA\Schema(type: 'integer', example: 1)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Laporan performa QC berhasil diambil', content: new OA\JsonContent(ref: '#/components/schemas/QcPerformanceReportResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 403, description: 'Forbidden (Bukan Manager)', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function qcPerformance(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', AuditLog::class);
+
+        $start = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : now()->startOfYear();
+        $end = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : now();
+        $perPage = (int) $request->input('per_page', 10);
+        $page = (int) $request->input('page', 1);
+
+        $report = $this->reportService->getQcPerformanceReport($start, $end, $perPage, $page);
+
+        return response()->json($report);
+    }
 }
+

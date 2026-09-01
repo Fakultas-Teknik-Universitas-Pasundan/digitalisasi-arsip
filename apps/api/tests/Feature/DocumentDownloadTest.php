@@ -21,8 +21,8 @@ class DocumentDownloadTest extends TestCase
     {
         parent::setUp();
 
-        // Fake storage
-        Storage::fake('public');
+        // Fake default storage
+        Storage::fake();
 
         // Create test users
         $this->manager = User::factory()->create(['role' => 'manager']);
@@ -41,7 +41,7 @@ class DocumentDownloadTest extends TestCase
         ]);
 
         // Create fake file
-        Storage::disk('public')->put($document->file_path, 'PDF content here');
+        Storage::put($document->file_path, 'PDF content here');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -59,7 +59,7 @@ class DocumentDownloadTest extends TestCase
             'file_name' => 'verified_doc.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Verified PDF content');
+        Storage::put($document->file_path, 'Verified PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -75,7 +75,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/pending.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Pending PDF content');
+        Storage::put($document->file_path, 'Pending PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -90,7 +90,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/rejected.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Rejected PDF content');
+        Storage::put($document->file_path, 'Rejected PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -105,7 +105,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/doc.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'PDF content');
+        Storage::put($document->file_path, 'PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -121,7 +121,7 @@ class DocumentDownloadTest extends TestCase
             'uploaded_by' => $this->uploader->id,
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Pending PDF');
+        Storage::put($document->file_path, 'Pending PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -138,7 +138,7 @@ class DocumentDownloadTest extends TestCase
             'uploaded_by' => $otherUploader->id,
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Pending PDF');
+        Storage::put($document->file_path, 'Pending PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -153,7 +153,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/doc.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'PDF content');
+        Storage::put($document->file_path, 'PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -168,7 +168,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/pending.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Pending PDF');
+        Storage::put($document->file_path, 'Pending PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -183,7 +183,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/rejected.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Rejected PDF');
+        Storage::put($document->file_path, 'Rejected PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -214,7 +214,7 @@ class DocumentDownloadTest extends TestCase
             'file_name' => 'my_document.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'PDF content');
+        Storage::put($document->file_path, 'PDF content');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -231,7 +231,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/pending.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Pending PDF');
+        Storage::put($document->file_path, 'Pending PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 
@@ -246,7 +246,7 @@ class DocumentDownloadTest extends TestCase
             'file_path' => 'archives/rejected.pdf',
         ]);
 
-        Storage::disk('public')->put($document->file_path, 'Rejected PDF');
+        Storage::put($document->file_path, 'Rejected PDF');
 
         $response = $this->get("/api/documents/{$document->id}/download");
 

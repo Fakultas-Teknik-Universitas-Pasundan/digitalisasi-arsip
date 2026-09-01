@@ -16,6 +16,8 @@ enum AuditAction: string
     case VIEW_DOCUMENT = 'view_document';
     case LOGIN = 'login';
     case LOGOUT = 'logout';
+    case UPDATE_SETTINGS = 'update_settings';
+    case CREATE_PRODI = 'create_prodi';
 
     /**
      * Get the label for the action.
@@ -35,6 +37,8 @@ enum AuditAction: string
             self::VIEW_DOCUMENT => 'Lihat',
             self::LOGIN => 'Masuk',
             self::LOGOUT => 'Keluar',
+            self::UPDATE_SETTINGS => 'Update Pengaturan',
+            self::CREATE_PRODI => 'Tambah Prodi',
         };
     }
 
@@ -46,7 +50,8 @@ enum AuditAction: string
         return match ($this) {
             self::VERIFY_DOCUMENT, self::CREATE_USER, self::LOGIN => 'success',
             self::REJECT_DOCUMENT, self::DELETE_USER, self::DELETE_DOCUMENT => 'danger',
-            self::UPLOAD_DOCUMENT, self::UPDATE_USER, self::UPDATE_DOCUMENT => 'primary',
+            self::UPLOAD_DOCUMENT, self::UPDATE_USER, self::UPDATE_DOCUMENT, self::UPDATE_SETTINGS => 'primary',
+            self::CREATE_PRODI => 'info',
             default => 'secondary',
         };
     }

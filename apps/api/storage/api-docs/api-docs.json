@@ -2,11 +2,11 @@
     "openapi": "3.0.0",
     "info": {
         "title": "API Digitalisasi Arsip",
-        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan session-based authentication.\n\n**Langkah autentikasi:**\n1. GET `/api/csrf-cookie` untuk mendapatkan CSRF token\n2. POST `/api/auth/login` dengan credentials\n3. Sertakan cookie dan X-XSRF-TOKEN header pada setiap request\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
+        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan session-based authentication / Bearer Token.\n\n**Langkah autentikasi (Session):**\n1. GET `/api/csrf-cookie` untuk mendapatkan CSRF token\n2. POST `/api/auth/login` dengan credentials\n3. Sertakan cookie dan X-XSRF-TOKEN header pada setiap request\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
         "contact": {
             "name": "API Support"
         },
-        "version": "2.4.0"
+        "version": "4.0.0"
     },
     "servers": [
         {
@@ -405,7 +405,7 @@
                     "Authentication"
                 ],
                 "summary": "Login",
-                "description": "Login dengan email dan password",
+                "description": "Login dengan email dan password. Autentikasi menggunakan session cookie (bukan token).",
                 "operationId": "login",
                 "requestBody": {
                     "required": true,
@@ -1092,6 +1092,393 @@
                 ]
             }
         },
+        "/api/documents/delete-multiple": {
+            "post": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Delete Multiple Documents",
+                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
+                "operationId": "deleteMultipleDocuments",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeleteMultipleRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Dokumen berhasil dihapus",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "3 dokumen berhasil dihapus."
+                                        },
+                                        "deleted_count": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/statistics": {
+            "get": {
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get Document Statistics",
+                "description": "Mengambil statistik dokumen: total, verified, pending, rejected (Manager only)",
+                "operationId": "getDocumentStatistics",
+                "responses": {
+                    "200": {
+                        "description": "Statistik dokumen berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DocumentStatisticsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/trashed": {
+            "get": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "List Trashed Documents",
+                "description": "Mengambil daftar dokumen yang ada di tempat sampah (Manager only)",
+                "operationId": "listTrashedDocuments",
+                "responses": {
+                    "200": {
+                        "description": "Daftar dokumen terhapus berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DocumentListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/{id}/restore": {
+            "post": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Restore Trashed Document",
+                "description": "Memulihkan dokumen yang terhapus kembali ke status semula (Manager only)",
+                "operationId": "restoreDocument",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Document ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dokumen berhasil dipulihkan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DocumentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Dokumen tidak ditemukan."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/{id}/force-delete": {
+            "delete": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Force Delete Document",
+                "description": "Menghapus dokumen dan file fisiknya secara permanen (Manager only)",
+                "operationId": "forceDeleteDocument",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Document ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Dokumen berhasil dihapus permanen",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Dokumen berhasil dihapus permanen."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Dokumen tidak ditemukan."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
         "/api/documents/{id}/download": {
             "get": {
                 "tags": [
@@ -1348,41 +1735,21 @@
                 ]
             }
         },
-        "/api/documents/delete-multiple": {
-            "post": {
+        "/api/document-types": {
+            "get": {
                 "tags": [
-                    "Documents"
+                    "Master Data"
                 ],
-                "summary": "Delete Multiple Documents",
-                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
-                "operationId": "deleteMultipleDocuments",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DeleteMultipleRequest"
-                            }
-                        }
-                    }
-                },
+                "summary": "Daftar jenis dokumen (UC-15)",
+                "description": "Mengambil seluruh daftar tipe dokumen yang didukung sistem beserta informasi kebutuhan verifikasi.",
+                "operationId": "c62f44dd8d33f370f2bfacbe2d54e2d4",
                 "responses": {
                     "200": {
-                        "description": "Dokumen berhasil dihapus",
+                        "description": "Daftar jenis dokumen berhasil diambil",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "3 dokumen berhasil dihapus."
-                                        },
-                                        "deleted_count": {
-                                            "type": "integer",
-                                            "example": 3
-                                        }
-                                    },
-                                    "type": "object"
+                                    "$ref": "#/components/schemas/DocumentTypeListResponse"
                                 }
                             }
                         }
@@ -1392,39 +1759,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Unauthenticated."
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "This action is unauthorized."
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ValidationError"
+                                    "$ref": "#/components/schemas/ErrorResponse"
                                 }
                             }
                         }
@@ -1623,21 +1958,53 @@
                 ]
             }
         },
-        "/api/documents/statistics": {
+        "/api/notifications": {
             "get": {
                 "tags": [
-                    "Statistics"
+                    "Notifications"
                 ],
-                "summary": "Get Document Statistics",
-                "description": "Mengambil statistik dokumen: total, verified, pending, rejected (Manager only)",
-                "operationId": "getDocumentStatistics",
+                "summary": "Daftar notifikasi pengguna yang sedang login (UC-13)",
+                "description": "Mengambil daftar notifikasi milik pengguna yang terautentikasi dengan paginasi dan filter unread.",
+                "operationId": "911565ad9aff9ba7eded3f189509e578",
+                "parameters": [
+                    {
+                        "name": "unread_only",
+                        "in": "query",
+                        "description": "Filter hanya notifikasi yang belum dibaca (true/false)",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "example": false
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Jumlah item per halaman (default 15)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 15
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Nomor halaman",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Statistik dokumen berhasil diambil",
+                        "description": "Daftar notifikasi berhasil diambil",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/DocumentStatisticsResponse"
+                                    "$ref": "#/components/schemas/NotificationListResponse"
                                 }
                             }
                         }
@@ -1647,29 +2014,302 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Unauthenticated."
-                                        }
-                                    },
-                                    "type": "object"
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/notifications/unread-count": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Jumlah notifikasi belum dibaca (UC-13)",
+                "description": "Mengambil jumlah total notifikasi yang belum dibaca untuk badge navbar.",
+                "operationId": "0272623bed30dd4d72141741fb3f25da",
+                "responses": {
+                    "200": {
+                        "description": "Jumlah unread notifikasi berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificationUnreadCountResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/notifications/{id}/read": {
+            "patch": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Tandai satu notifikasi sebagai sudah dibaca (UC-13)",
+                "description": "Memperbarui status notifikasi menjadi sudah dibaca (read_at = now).",
+                "operationId": "65581bb40eba3764fb900f21495814de",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID Notifikasi",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notifikasi berhasil ditandai sebagai sudah dibaca",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Notifikasi tidak ditemukan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/notifications/mark-all-read": {
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Tandai semua notifikasi pengguna sebagai sudah dibaca (UC-13)",
+                "description": "Memperbarui semua notifikasi yang belum dibaca milik pengguna menjadi sudah dibaca.",
+                "operationId": "e1e017838e0e1ed1cd321ccf80869335",
+                "responses": {
+                    "200": {
+                        "description": "Semua notifikasi berhasil ditandai sudah dibaca",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/notifications/{id}": {
+            "delete": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Hapus notifikasi (UC-13)",
+                "description": "Menghapus satu notifikasi milik pengguna berdasarkan ID UUID.",
+                "operationId": "54c4eb5ec5dc0d1e2916cec2fced1056",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID Notifikasi",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notifikasi berhasil dihapus",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Notifikasi tidak ditemukan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/prodis": {
+            "get": {
+                "tags": [
+                    "Master Data"
+                ],
+                "summary": "Daftar program studi aktif (UC-15)",
+                "description": "Mengambil seluruh daftar program studi aktif di lingkungan fakultas.",
+                "operationId": "b136b6bb0c8624cf80cfbb696a7e9517",
+                "responses": {
+                    "200": {
+                        "description": "Daftar program studi berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProdiListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Master Data"
+                ],
+                "summary": "Tambah program studi baru (UC-15) - Manager only",
+                "description": "Menambahkan data program studi baru ke database master data. Hanya dapat diakses oleh Manager.",
+                "operationId": "ae3098bcd69ea540e2ebf64695f58e5a",
+                "requestBody": {
+                    "description": "Data program studi baru",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateProdiRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Program studi berhasil ditambahkan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProdiResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
                                 }
                             }
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Forbidden (Bukan Manager)",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "This action is unauthorized."
-                                        }
-                                    },
-                                    "type": "object"
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
                                 }
                             }
                         }
@@ -1774,11 +2414,7 @@
                                     "properties": {
                                         "message": {
                                             "type": "string",
-                                            "example": "Gagal membuat laporan."
-                                        },
-                                        "error": {
-                                            "type": "string",
-                                            "example": "Internal error message"
+                                            "example": "Gagal membuat laporan. Silakan coba lagi."
                                         }
                                     },
                                     "type": "object"
@@ -1861,6 +2497,212 @@
                                         }
                                     },
                                     "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/reports/qc-performance": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Laporan performa dan efisiensi staf verifikator QC (UC-16) - Manager only",
+                "description": "Mengambil ringkasan statistik dan detail kinerja individual staf QC (jumlah verifikasi, penolakan, akurasi, status online/last seen) dengan paginasi dan filter periode. Hanya dapat diakses oleh Manager.",
+                "operationId": "6e176897015e76b20f70f638dfeec2b4",
+                "parameters": [
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "description": "Tanggal awal periode (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-01-01"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "description": "Tanggal akhir periode (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-08-18"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Jumlah verifikator per halaman (default 10)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 10
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Nomor halaman (default 1)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Laporan performa QC berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/QcPerformanceReportResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Bukan Manager)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/system-settings": {
+            "get": {
+                "tags": [
+                    "System Settings"
+                ],
+                "summary": "Daftar pengaturan sistem (UC-14)",
+                "description": "Mengambil pengaturan sistem dalam bentuk key-value map dan detail array. Dapat difilter berdasarkan group.",
+                "operationId": "49147b6a500519da739f8dda5ea3b162",
+                "parameters": [
+                    {
+                        "name": "group",
+                        "in": "query",
+                        "description": "Filter berdasarkan nama group (contoh: upload, app)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "upload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Pengaturan sistem berhasil diambil",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SystemSettingsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "System Settings"
+                ],
+                "summary": "Perbarui pengaturan sistem secara massal (UC-14) - Manager only",
+                "description": "Memperbarui nilai dari array pengaturan sistem (key-value). Hanya dapat diakses oleh Manager.",
+                "operationId": "9c82b3c5a92335fedf8a35f2dc4b9423",
+                "requestBody": {
+                    "description": "Array berisi pasangan key dan value pengaturan yang akan diubah",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateSystemSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Pengaturan sistem berhasil diperbarui",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpdateSystemSettingsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Bukan Manager)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
                                 }
                             }
                         }
@@ -2620,6 +3462,102 @@
     },
     "components": {
         "schemas": {
+            "BulkActionRequest": {
+                "required": [
+                    "ids"
+                ],
+                "properties": {
+                    "ids": {
+                        "description": "Array of resource IDs",
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "example": [
+                            1,
+                            2,
+                            3
+                        ]
+                    }
+                },
+                "type": "object"
+            },
+            "CheckEmailRequest": {
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "new.user@example.com"
+                    }
+                },
+                "type": "object"
+            },
+            "GenerateReportRequest": {
+                "required": [
+                    "period_start",
+                    "period_end",
+                    "format",
+                    "type"
+                ],
+                "properties": {
+                    "period_start": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2026-01-01"
+                    },
+                    "period_end": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2026-08-21"
+                    },
+                    "format": {
+                        "type": "string",
+                        "example": "pdf",
+                        "enum": [
+                            "pdf",
+                            "xlsx",
+                            "csv"
+                        ]
+                    },
+                    "type": {
+                        "type": "string",
+                        "example": "monthly",
+                        "enum": [
+                            "monthly",
+                            "annual",
+                            "custom"
+                        ]
+                    },
+                    "style": {
+                        "type": "string",
+                        "example": "detailed",
+                        "nullable": true,
+                        "enum": [
+                            "detailed",
+                            "summary",
+                            "executive"
+                        ]
+                    },
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "upload_stats",
+                                "qc_metrics",
+                                "doc_status",
+                                "user_activity",
+                                "trend_analysis"
+                            ]
+                        },
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "ValidationError": {
                 "properties": {
                     "message": {
@@ -2735,6 +3673,12 @@
                             "qc",
                             "sbap"
                         ]
+                    },
+                    "last_seen_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z",
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",
@@ -3474,6 +4418,486 @@
                     }
                 },
                 "type": "object"
+            },
+            "Notification": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "example": "d3b07384-d113-4a18-971c-99d821217e94"
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "example": 2
+                    },
+                    "title": {
+                        "type": "string",
+                        "example": "Dokumen Diverifikasi"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Dokumen Nilai_Web.pdf telah diverifikasi dan disetujui."
+                    },
+                    "type": {
+                        "type": "string",
+                        "example": "document_verified"
+                    },
+                    "action_url": {
+                        "type": "string",
+                        "example": "/documents/1",
+                        "nullable": true
+                    },
+                    "read_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    }
+                },
+                "type": "object"
+            },
+            "NotificationListResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Notification"
+                        }
+                    },
+                    "meta": {
+                        "properties": {
+                            "current_page": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "last_page": {
+                                "type": "integer",
+                                "example": 3
+                            },
+                            "per_page": {
+                                "type": "integer",
+                                "example": 15
+                            },
+                            "total": {
+                                "type": "integer",
+                                "example": 42
+                            },
+                            "unread_count": {
+                                "type": "integer",
+                                "example": 5
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "NotificationUnreadCountResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "unread_count": {
+                        "type": "integer",
+                        "example": 5
+                    }
+                },
+                "type": "object"
+            },
+            "NotificationResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Notifikasi berhasil ditandai sebagai sudah dibaca."
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/Notification"
+                    }
+                },
+                "type": "object"
+            },
+            "SuccessMessageResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Operasi berhasil dilakukan."
+                    }
+                },
+                "type": "object"
+            },
+            "SystemSettingDetail": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "key": {
+                        "type": "string",
+                        "example": "max_upload_size_mb"
+                    },
+                    "value": {
+                        "type": "string",
+                        "example": "10"
+                    },
+                    "group_name": {
+                        "type": "string",
+                        "example": "upload"
+                    },
+                    "description": {
+                        "type": "string",
+                        "example": "Maksimal ukuran upload berkas",
+                        "nullable": true
+                    },
+                    "updated_by": {
+                        "type": "integer",
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    }
+                },
+                "type": "object"
+            },
+            "SystemSettingsResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "data": {
+                        "description": "Key-value map pengaturan sistem",
+                        "type": "object",
+                        "example": {
+                            "max_upload_size_mb": "10",
+                            "allowed_file_types": "pdf",
+                            "app_name": "Digitalisasi Arsip FT Unpas"
+                        }
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SystemSettingDetail"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateSystemSettingsRequest": {
+                "required": [
+                    "settings"
+                ],
+                "properties": {
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "required": [
+                                "key",
+                                "value"
+                            ],
+                            "properties": {
+                                "key": {
+                                    "type": "string",
+                                    "example": "max_upload_size_mb"
+                                },
+                                "value": {
+                                    "type": "string",
+                                    "example": "15"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateSystemSettingsResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Pengaturan sistem berhasil diperbarui."
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SystemSettingDetail"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "Prodi": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "code": {
+                        "type": "string",
+                        "example": "IF"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Teknik Informatika"
+                    },
+                    "degree": {
+                        "type": "string",
+                        "example": "S1"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    }
+                },
+                "type": "object"
+            },
+            "ProdiListResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Prodi"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "CreateProdiRequest": {
+                "required": [
+                    "code",
+                    "name",
+                    "degree"
+                ],
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "example": "PWK"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Perencanaan Wilayah dan Kota"
+                    },
+                    "degree": {
+                        "type": "string",
+                        "example": "S1"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ProdiResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Program Studi berhasil ditambahkan."
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/Prodi"
+                    }
+                },
+                "type": "object"
+            },
+            "DocumentType": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "code": {
+                        "type": "string",
+                        "example": "nilai"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Nilai"
+                    },
+                    "requires_verification": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z"
+                    }
+                },
+                "type": "object"
+            },
+            "DocumentTypeListResponse": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "example": "success"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DocumentType"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "QcPerformanceItem": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "QC Verifier 1"
+                    },
+                    "email": {
+                        "type": "string",
+                        "example": "qc1@test.com"
+                    },
+                    "is_online": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "last_seen_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-18T20:00:00.000000Z",
+                        "nullable": true
+                    },
+                    "total_processed": {
+                        "type": "integer",
+                        "example": 50
+                    },
+                    "verified_count": {
+                        "type": "integer",
+                        "example": 45
+                    },
+                    "rejected_count": {
+                        "type": "integer",
+                        "example": 5
+                    },
+                    "accuracy_rate": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 90
+                    }
+                },
+                "type": "object"
+            },
+            "QcPerformanceSummary": {
+                "properties": {
+                    "total_qc_staff": {
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "active_online_qc": {
+                        "type": "integer",
+                        "example": 2
+                    },
+                    "total_verified": {
+                        "type": "integer",
+                        "example": 120
+                    },
+                    "total_rejected": {
+                        "type": "integer",
+                        "example": 15
+                    },
+                    "average_accuracy_rate": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 88.89
+                    }
+                },
+                "type": "object"
+            },
+            "QcPerformanceReportResponse": {
+                "properties": {
+                    "summary": {
+                        "$ref": "#/components/schemas/QcPerformanceSummary"
+                    },
+                    "verifiers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/QcPerformanceItem"
+                        }
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "period": {
+                        "properties": {
+                            "start_date": {
+                                "type": "string",
+                                "example": "2026-01-01"
+                            },
+                            "end_date": {
+                                "type": "string",
+                                "example": "2026-08-18"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
             }
         },
         "securitySchemes": {
@@ -3491,6 +4915,18 @@
             "description": "Endpoints untuk autentikasi"
         },
         {
+            "name": "Notifications",
+            "description": "User Notifications & Badges (UC-13)"
+        },
+        {
+            "name": "System Settings",
+            "description": "Application Settings & Configurations (UC-14)"
+        },
+        {
+            "name": "Master Data",
+            "description": "Master Data Prodi & Document Types (UC-15)"
+        },
+        {
             "name": "Users",
             "description": "User Management (UC-01) - Manager only"
         },
@@ -3504,7 +4940,7 @@
         },
         {
             "name": "Reports",
-            "description": "Report Generation & Dashboard Statistics (UC-09) - Manager only"
+            "description": "Report Generation, QC Performance & Dashboard Statistics (UC-09, UC-16) - Manager only"
         },
         {
             "name": "Statistics",

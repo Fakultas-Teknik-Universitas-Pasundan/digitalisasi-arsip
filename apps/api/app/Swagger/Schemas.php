@@ -93,6 +93,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'email', type: 'string', format: 'email', example: 'manager@test.com'),
         new OA\Property(property: 'nip', type: 'string', nullable: true, example: '1234567890'),
         new OA\Property(property: 'role', type: 'string', enum: ['manager', 'uploader', 'qc', 'sbap'], example: 'manager'),
+        new OA\Property(property: 'last_seen_at', type: 'string', format: 'date-time', nullable: true, example: '2026-08-18T20:00:00.000000Z'),
         new OA\Property(property: 'created_at', type: 'string', format: 'date-time', example: '2026-01-14T04:00:00.000000Z'),
         new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', example: '2026-01-14T04:00:00.000000Z'),
     ]
@@ -406,6 +407,259 @@ use OpenApi\Attributes as OA;
             properties: [
                 new OA\Property(property: 'start_date', type: 'string', format: 'date-time'),
                 new OA\Property(property: 'end_date', type: 'string', format: 'date-time'),
+            ]
+        ),
+    ]
+)]
+
+// ============================================================
+// Notification Schemas (v4.0)
+// ============================================================
+
+#[OA\Schema(
+    schema: 'Notification',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'id', type: 'string', format: 'uuid', example: 'd3b07384-d113-4a18-971c-99d821217e94'),
+        new OA\Property(property: 'user_id', type: 'integer', example: 2),
+        new OA\Property(property: 'title', type: 'string', example: 'Dokumen Diverifikasi'),
+        new OA\Property(property: 'message', type: 'string', example: 'Dokumen Nilai_Web.pdf telah diverifikasi dan disetujui.'),
+        new OA\Property(property: 'type', type: 'string', example: 'document_verified'),
+        new OA\Property(property: 'action_url', type: 'string', nullable: true, example: '/documents/1'),
+        new OA\Property(property: 'read_at', type: 'string', format: 'date-time', nullable: true, example: null),
+        new OA\Property(property: 'created_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'NotificationListResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Notification')),
+        new OA\Property(
+            property: 'meta',
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'current_page', type: 'integer', example: 1),
+                new OA\Property(property: 'last_page', type: 'integer', example: 3),
+                new OA\Property(property: 'per_page', type: 'integer', example: 15),
+                new OA\Property(property: 'total', type: 'integer', example: 42),
+                new OA\Property(property: 'unread_count', type: 'integer', example: 5),
+            ]
+        ),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'NotificationUnreadCountResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'unread_count', type: 'integer', example: 5),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'NotificationResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'message', type: 'string', example: 'Notifikasi berhasil ditandai sebagai sudah dibaca.'),
+        new OA\Property(property: 'data', ref: '#/components/schemas/Notification'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'SuccessMessageResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'message', type: 'string', example: 'Operasi berhasil dilakukan.'),
+    ]
+)]
+
+// ============================================================
+// System Setting Schemas (v4.0)
+// ============================================================
+
+#[OA\Schema(
+    schema: 'SystemSettingDetail',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', example: 1),
+        new OA\Property(property: 'key', type: 'string', example: 'max_upload_size_mb'),
+        new OA\Property(property: 'value', type: 'string', example: '10'),
+        new OA\Property(property: 'group_name', type: 'string', example: 'upload'),
+        new OA\Property(property: 'description', type: 'string', nullable: true, example: 'Maksimal ukuran upload berkas'),
+        new OA\Property(property: 'updated_by', type: 'integer', nullable: true, example: 1),
+        new OA\Property(property: 'created_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'SystemSettingsResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(
+            property: 'data',
+            type: 'object',
+            description: 'Key-value map pengaturan sistem',
+            example: ['max_upload_size_mb' => '10', 'allowed_file_types' => 'pdf', 'app_name' => 'Digitalisasi Arsip FT Unpas']
+        ),
+        new OA\Property(property: 'details', type: 'array', items: new OA\Items(ref: '#/components/schemas/SystemSettingDetail')),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'UpdateSystemSettingsRequest',
+    required: ['settings'],
+    type: 'object',
+    properties: [
+        new OA\Property(
+            property: 'settings',
+            type: 'array',
+            items: new OA\Items(
+                type: 'object',
+                required: ['key', 'value'],
+                properties: [
+                    new OA\Property(property: 'key', type: 'string', example: 'max_upload_size_mb'),
+                    new OA\Property(property: 'value', type: 'string', example: '15'),
+                ]
+            )
+        ),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'UpdateSystemSettingsResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'message', type: 'string', example: 'Pengaturan sistem berhasil diperbarui.'),
+        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/SystemSettingDetail')),
+    ]
+)]
+
+// ============================================================
+// Master Data Schemas: Prodi & DocumentType (v4.0)
+// ============================================================
+
+#[OA\Schema(
+    schema: 'Prodi',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', example: 1),
+        new OA\Property(property: 'code', type: 'string', example: 'IF'),
+        new OA\Property(property: 'name', type: 'string', example: 'Teknik Informatika'),
+        new OA\Property(property: 'degree', type: 'string', example: 'S1'),
+        new OA\Property(property: 'is_active', type: 'boolean', example: true),
+        new OA\Property(property: 'created_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'ProdiListResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Prodi')),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'CreateProdiRequest',
+    required: ['code', 'name', 'degree'],
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'code', type: 'string', example: 'PWK'),
+        new OA\Property(property: 'name', type: 'string', example: 'Perencanaan Wilayah dan Kota'),
+        new OA\Property(property: 'degree', type: 'string', example: 'S1'),
+        new OA\Property(property: 'is_active', type: 'boolean', nullable: true, example: true),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'ProdiResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'message', type: 'string', example: 'Program Studi berhasil ditambahkan.'),
+        new OA\Property(property: 'data', ref: '#/components/schemas/Prodi'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'DocumentType',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', example: 1),
+        new OA\Property(property: 'code', type: 'string', example: 'nilai'),
+        new OA\Property(property: 'name', type: 'string', example: 'Nilai'),
+        new OA\Property(property: 'requires_verification', type: 'boolean', example: true),
+        new OA\Property(property: 'created_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', example: '2026-08-18T20:00:00.000000Z'),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'DocumentTypeListResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'status', type: 'string', example: 'success'),
+        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/DocumentType')),
+    ]
+)]
+
+// ============================================================
+// QC Performance Report Schemas (v4.0)
+// ============================================================
+
+#[OA\Schema(
+    schema: 'QcPerformanceItem',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', example: 3),
+        new OA\Property(property: 'name', type: 'string', example: 'QC Verifier 1'),
+        new OA\Property(property: 'email', type: 'string', example: 'qc1@test.com'),
+        new OA\Property(property: 'is_online', type: 'boolean', example: true),
+        new OA\Property(property: 'last_seen_at', type: 'string', format: 'date-time', nullable: true, example: '2026-08-18T20:00:00.000000Z'),
+        new OA\Property(property: 'total_processed', type: 'integer', example: 50),
+        new OA\Property(property: 'verified_count', type: 'integer', example: 45),
+        new OA\Property(property: 'rejected_count', type: 'integer', example: 5),
+        new OA\Property(property: 'accuracy_rate', type: 'number', format: 'float', example: 90.0),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'QcPerformanceSummary',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'total_qc_staff', type: 'integer', example: 4),
+        new OA\Property(property: 'active_online_qc', type: 'integer', example: 2),
+        new OA\Property(property: 'total_verified', type: 'integer', example: 120),
+        new OA\Property(property: 'total_rejected', type: 'integer', example: 15),
+        new OA\Property(property: 'average_accuracy_rate', type: 'number', format: 'float', example: 88.89),
+    ]
+)]
+
+#[OA\Schema(
+    schema: 'QcPerformanceReportResponse',
+    type: 'object',
+    properties: [
+        new OA\Property(property: 'summary', ref: '#/components/schemas/QcPerformanceSummary'),
+        new OA\Property(property: 'verifiers', type: 'array', items: new OA\Items(ref: '#/components/schemas/QcPerformanceItem')),
+        new OA\Property(property: 'pagination', ref: '#/components/schemas/PaginationMeta'),
+        new OA\Property(
+            property: 'period',
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'start_date', type: 'string', example: '2026-01-01'),
+                new OA\Property(property: 'end_date', type: 'string', example: '2026-08-18'),
             ]
         ),
     ]

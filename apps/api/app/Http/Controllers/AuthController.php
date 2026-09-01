@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
+use App\Http\Requests\CheckEmailRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Resources\UserResource;
 use App\Models\AuditLog;
 use App\Services\LoginAttemptService;
 use Illuminate\Http\JsonResponse;
@@ -72,12 +74,8 @@ class AuthController extends Controller
             ),
         ]
     )]
-    public function checkEmail(Request $request): JsonResponse
+    public function checkEmail(CheckEmailRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => ['required', 'email'],
-        ]);
-
         $exists = \App\Models\User::where('email', $request->email)->exists();
 
         return response()->json([
@@ -168,7 +166,9 @@ class AuthController extends Controller
         app(LoginAttemptService::class)->clearAttempts($request->email);
 
         // Regenerate session to prevent session fixation attacks
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         $user = Auth::user();
 
@@ -188,12 +188,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login berhasil.',
             'data' => [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role->value,
-                ],
+                'user' => new UserResource($user),
             ],
         ], 200);
     }
@@ -244,9 +239,11 @@ class AuthController extends Controller
         // Logout: clear auth state
         Auth::guard('web')->logout();
 
-        // Invalidate session and regenerate CSRF token
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        // Invalidate session and regenerate CSRF token if session exists
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json([
             'message' => 'Logout berhasil.',
@@ -287,12 +284,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Data pengguna berhasil diambil.',
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role->value,
-            ],
+            'data' => new UserResource($user),
         ], 200);
     }
 }

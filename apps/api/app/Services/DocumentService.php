@@ -11,7 +11,12 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+
+/**
+ * @method static string escapeLike(string $value)
+ */
 
 class DocumentService
 {
@@ -148,7 +153,7 @@ class DocumentService
     }
 
     /**
-     * Delete a document and its file.
+     * Soft delete a document (preserves physical file for potential restore).
      *
      * @param Document $document
      * @return bool
@@ -160,22 +165,67 @@ class DocumentService
         try {
             $documentId = $document->id;
             $fileName = $document->file_name;
-            $filePath = $document->file_path;
 
-            // Delete document record
+            // Release duplicate_key so new document with same metadata can be uploaded
+            $document->update([
+                'duplicate_key' => $document->duplicate_key . '_del_' . now()->timestamp . '_' . Str::random(6),
+            ]);
+
+            // Soft delete document record (physical file is preserved)
             $deleted = $document->delete();
 
             if ($deleted) {
-                // Delete physical file
-                Storage::delete($filePath);
-
                 // Log deletion
                 AuditLog::log(
                     action: AuditAction::DELETE_DOCUMENT->value,
-                    description: "Dokumen '{$fileName}' dihapus.",
+                    description: "Dokumen '{$fileName}' dihapus (soft delete).",
                     metadata: [
                         'document_id' => $documentId,
                         'file_name' => $fileName,
+                    ]
+                );
+            }
+
+            DB::commit();
+
+            return $deleted;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Permanently delete a document and its physical file.
+     * Use this for cleanup of soft-deleted documents.
+     *
+     * @param Document $document
+     * @return bool
+     */
+    public function forceDeleteDocument(Document $document): bool
+    {
+        DB::beginTransaction();
+
+        try {
+            $documentId = $document->id;
+            $fileName = $document->file_name;
+            $filePath = $document->file_path;
+
+            // Permanently delete document record
+            $deleted = $document->forceDelete();
+
+            if ($deleted) {
+                // Delete physical file from storage
+                Storage::delete($filePath);
+
+                // Log permanent deletion
+                AuditLog::log(
+                    action: AuditAction::DELETE_DOCUMENT->value,
+                    description: "Dokumen '{$fileName}' dihapus permanen beserta file fisik.",
+                    metadata: [
+                        'document_id' => $documentId,
+                        'file_name' => $fileName,
+                        'file_path' => $filePath,
                     ]
                 );
             }
@@ -225,6 +275,9 @@ class DocumentService
 
             // Log verification activity
             $this->logVerification($document, $status, $verifierId);
+
+            // Dispatch event for notification creation
+            event(new \App\Events\DocumentStatusChanged($document, $status, $note));
 
             DB::commit();
 
@@ -385,6 +438,18 @@ class DocumentService
             userId: $userId
         );
     }
+
+    /**
+     * Escape special LIKE wildcard characters to prevent filter bypass.
+     *
+     * @param string $value
+     * @return string
+     */
+    protected function escapeLike(string $value): string
+    {
+        return addcslashes($value, '%_\\');
+    }
+
     /**
      * Get document statistics.
      * 
@@ -397,11 +462,189 @@ class DocumentService
         $pending = Document::where('status', DocumentStatus::PENDING)->count();
         $rejected = Document::where('status', DocumentStatus::REJECTED)->count();
 
+        $byTypeCounts = Document::select('document_type', DB::raw('count(*) as count'))
+            ->groupBy('document_type')
+            ->pluck('count', 'document_type')
+            ->toArray();
+
+        $byDocumentType = [
+            'nilai' => (int) ($byTypeCounts['nilai'] ?? 0),
+            'transkrip' => (int) ($byTypeCounts['transkrip'] ?? 0),
+            'ijazah' => (int) ($byTypeCounts['ijazah'] ?? 0),
+            'berita_acara_sidang' => (int) ($byTypeCounts['berita_acara_sidang'] ?? 0),
+        ];
+
         return [
             'total_documents' => $total,
             'verified_documents' => $verified,
             'pending_documents' => $pending,
             'rejected_documents' => $rejected,
+            'by_document_type' => $byDocumentType,
         ];
     }
+
+    /**
+     * Get paginated documents with filtering, search, and sorting.
+     *
+     * @param array $filters
+     * @param int $perPage
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function listDocuments(array $filters = [], int $perPage = 15, ?int $uploaderId = null)
+    {
+        $query = Document::with(['uploader', 'verifier']);
+
+        // Scope to uploader's own documents if uploader ID is provided
+        if ($uploaderId !== null) {
+            $query->where('uploaded_by', $uploaderId);
+        }
+
+        // Filter by document type
+        if (!empty($filters['document_type'])) {
+            $query->where('document_type', $filters['document_type']);
+        }
+
+        // Filter by status
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        // Filter by prodi
+        if (!empty($filters['prodi'])) {
+            $prodi = $this->escapeLike($filters['prodi']);
+            $query->where('prodi', 'like', "%{$prodi}%");
+        }
+
+        // Filter by nim / npm
+        if (!empty($filters['nim']) || !empty($filters['npm'])) {
+            $nim = $this->escapeLike($filters['nim'] ?? $filters['npm']);
+            $query->where('npm', 'like', "%{$nim}%");
+        }
+
+        // Filter by mata_kuliah
+        if (!empty($filters['mata_kuliah'])) {
+            $mataKuliah = $this->escapeLike($filters['mata_kuliah']);
+            $query->where('mata_kuliah', 'like', "%{$mataKuliah}%");
+        }
+
+        // Filter by tahun_akademik / tahun_ajaran
+        if (!empty($filters['tahun_akademik']) || !empty($filters['tahun_ajaran'])) {
+            $tahun = $this->escapeLike($filters['tahun_akademik'] ?? $filters['tahun_ajaran']);
+            $query->where('tahun_ajaran', 'like', "%{$tahun}%");
+        }
+
+        // Filter by date range
+        if (!empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+
+        // Search by all fields
+        if (!empty($filters['search'])) {
+            $search = $this->escapeLike($filters['search']);
+            $query->where(function ($q) use ($search) {
+                $q->where('file_name', 'like', "%{$search}%")
+                    ->orWhere('tahun_ajaran', 'like', "%{$search}%")
+                    ->orWhere('mata_kuliah', 'like', "%{$search}%")
+                    ->orWhere('npm', 'like', "%{$search}%")
+                    ->orWhere('document_type', 'like', "%{$search}%")
+                    ->orWhere('status', 'like', "%{$search}%");
+            });
+        }
+
+        // Sorting
+        $allowedSorts = ['created_at', 'updated_at', 'tahun_lulus', 'status', 'document_type', 'prodi', 'file_name'];
+        $sortBy = $filters['sort_by'] ?? 'created_at';
+        $sortDirection = $filters['sort_direction'] ?? 'desc';
+
+        if (!in_array($sortBy, $allowedSorts)) {
+            $sortBy = 'created_at';
+        }
+
+        if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
+            $sortDirection = 'desc';
+        }
+
+        return $query->orderBy($sortBy, $sortDirection)->paginate($perPage);
+    }
+
+    /**
+     * Get paginated soft-deleted (trashed) documents.
+     *
+     * @param array $filters
+     * @param int $perPage
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getTrashedDocuments(array $filters = [], int $perPage = 15)
+    {
+        $query = Document::onlyTrashed()->with(['uploader', 'verifier']);
+
+        if (!empty($filters['document_type'])) {
+            $query->where('document_type', $filters['document_type']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = $this->escapeLike($filters['search']);
+            $query->where(function ($q) use ($search) {
+                $q->where('file_name', 'like', "%{$search}%")
+                    ->orWhere('npm', 'like', "%{$search}%");
+            });
+        }
+
+        return $query->orderBy('deleted_at', 'desc')->paginate($perPage);
+    }
+
+    /**
+     * Restore a soft-deleted document.
+     *
+     * @param int $id
+     * @param int $userId
+     * @return Document
+     */
+    public function restoreDocument(int $id, int $userId): Document
+    {
+        $document = Document::onlyTrashed()->findOrFail($id);
+
+        // Regenerate original duplicate key
+        $docType = $document->document_type instanceof \BackedEnum ? $document->document_type->value : $document->document_type;
+        $prodi = $document->prodi instanceof \BackedEnum ? $document->prodi->value : $document->prodi;
+
+        $originalKey = Document::generateDuplicateKey([
+            'document_type' => $docType,
+            'prodi' => $prodi,
+            'tahun_ajaran' => $document->tahun_ajaran,
+            'mata_kuliah' => $document->mata_kuliah,
+            'kelas' => $document->kelas,
+            'tahun_lulus' => $document->tahun_lulus,
+            'npm' => $document->npm,
+        ]);
+
+        // Check if an active document with the same duplicate key already exists
+        $existing = Document::where('duplicate_key', $originalKey)->first();
+        if ($existing) {
+            throw new ConflictHttpException('Tidak dapat memulihkan dokumen karena sudah ada dokumen aktif dengan data yang sama.');
+        }
+
+        $document->update(['duplicate_key' => $originalKey]);
+        $document->restore();
+
+        AuditLog::log(
+            action: AuditAction::UPDATE_DOCUMENT->value,
+            description: "Dokumen '{$document->file_name}' berhasil dipulihkan dari tempat sampah.",
+            metadata: [
+                'document_id' => $document->id,
+                'file_name' => $document->file_name,
+                'restored_by' => $userId,
+            ],
+            modelType: ModelType::DOCUMENT->value,
+            modelId: $document->id,
+            userId: $userId
+        );
+
+        return $document->fresh(['uploader', 'verifier']);
+    }
 }
+
+

@@ -232,8 +232,39 @@ test('validasi role enum saat membuat user', function () {
         ->assertJsonValidationErrors(['role']);
 });
 
+test('validasi nip unik saat membuat user', function () {
+    $this->actingAs($this->manager);
+
+    $this->uploader->update(['nip' => '198501012010121001']);
+
+    $response = $this->postJson('/api/users', [
+        'name' => 'New User',
+        'email' => 'newuser@test.com',
+        'nip' => '198501012010121001', // Duplicate NIP
+        'password' => 'password123',
+        'role' => 'uploader',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['nip']);
+});
+
+test('validasi nip unik saat update user', function () {
+    $this->actingAs($this->manager);
+
+    $this->uploader->update(['nip' => '198501012010121001']);
+
+    $response = $this->putJson("/api/users/{$this->qc->id}", [
+        'nip' => '198501012010121001', // Duplicate NIP
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['nip']);
+});
+
 test('user tidak terautentikasi tidak bisa akses manajemen user', function () {
     $response = $this->getJson('/api/users');
 
     $response->assertStatus(401);
 });
+

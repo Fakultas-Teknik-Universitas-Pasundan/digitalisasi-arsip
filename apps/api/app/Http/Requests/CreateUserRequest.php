@@ -25,7 +25,7 @@ class CreateUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'nip' => ['nullable', 'string', 'max:50'],
+            'nip' => ['nullable', 'string', 'max:50', 'unique:users,nip'],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['required', Rule::in(['manager', 'uploader', 'qc', 'sbap'])],
         ];
@@ -45,6 +45,7 @@ class CreateUserRequest extends FormRequest
             'email.required' => 'Alamat email wajib diisi.',
             'email.email' => 'Format alamat email tidak valid. Contoh: nama@example.com',
             'email.unique' => 'Alamat email sudah terdaftar. Gunakan email lain.',
+            'nip.unique' => 'NIP sudah terdaftar dalam sistem.',
             'password.required' => 'Password wajib diisi.',
             'password.min' => 'Password minimal 8 karakter.',
             'role.required' => 'Role pengguna wajib dipilih.',

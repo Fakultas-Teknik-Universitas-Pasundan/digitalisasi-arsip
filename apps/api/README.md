@@ -56,12 +56,12 @@ Server running at: `http://localhost:8000`
 
 ## 📚 Documentation
 
-| Document                                                         | Description                            |
-| ---------------------------------------------------------------- | -------------------------------------- |
-| [Panduan_Testing_API_Postman.md](Panduan_Testing_API_Postman.md) | Comprehensive API testing guide        |
-| [docs/sanctum-integration.md](docs/sanctum-integration.md)       | Frontend integration with Bearer Token |
-| [docs/security-testing-guide.md](docs/security-testing-guide.md) | Security features testing guide        |
-| [swagger.yaml](swagger.yaml)                                     | OpenAPI 3.0 specification (v3.0.0)     |
+| Document | Description |
+| --- | --- |
+| [API_CONTRACT.md](API_CONTRACT.md) | Official API Contract Specification (v4.0.0) |
+| [Panduan_Testing_API_Postman.md](Panduan_Testing_API_Postman.md) | Comprehensive API testing guide |
+| [Swagger UI (`/api/documentation`)](http://localhost:8000/api/documentation) | Interactive OpenAPI 3.0 Documentation |
+| [docs/security-testing-guide.md](docs/security-testing-guide.md) | Security features testing guide |
 
 ---
 
@@ -154,6 +154,25 @@ See `config/login-security.php` for all options.
 - `POST /api/documents/delete-multiple` - Delete multiple documents
 - `GET /api/documents/statistics` - Document statistics
 
+**Notifications:**
+
+- `GET /api/notifications` - List user notifications (`?unread_only=true`)
+- `GET /api/notifications/unread-count` - Get unread count badge
+- `PATCH /api/notifications/{id}/read` - Mark single notification as read
+- `POST /api/notifications/mark-all-read` - Mark all user notifications as read
+- `DELETE /api/notifications/{id}` - Delete notification
+
+**System Settings:**
+
+- `GET /api/system-settings` - List system settings (`?group=general`)
+- `PUT /api/system-settings` - Bulk update system settings (Manager only)
+
+**Master Data:**
+
+- `GET /api/prodis` - List active FT Unpas Prodis
+- `POST /api/prodis` - Create new Prodi (Manager only)
+- `GET /api/document-types` - List document types
+
 **Audit Logs (Manager only):**
 
 - `GET /api/audit-logs` - List audit logs
@@ -164,6 +183,7 @@ See `config/login-security.php` for all options.
 
 - `POST /api/reports/generate` - Generate report (PDF/Excel/CSV)
 - `GET /api/reports/dashboard` - Dashboard statistics
+- `GET /api/reports/qc-performance` - QC Verifier Performance report & online status
 
 ---
 
@@ -182,22 +202,26 @@ See `config/login-security.php` for all options.
 
 ### Core Tables
 
-- `users` - User accounts with roles
+- `users` - User accounts with roles & `last_seen_at` timestamp
 - `documents` - Document metadata & file info
+- `notifications` - System notifications triggered on document verification
+- `system_settings` - Centralized application configurations
+- `prodis` - Master Data Program Studi FT Unpas
+- `document_types` - Master Data Jenis Dokumen
 - `audit_logs` - Comprehensive activity logging
 - `login_attempts` - Failed login tracking
 - `personal_access_tokens` - Sanctum Bearer tokens
 
-### Document Types (Enum)
+### Document Types (Enum & Master Data)
 
 - `nilai` - Nilai/Grades
 - `ijazah` - Diploma/Certificate
 - `transkrip` - Transcript
-- `berita_acara_sidang` - Siding Report
+- `berita_acara_sidang` - Sidang Report
 
-### Prodi (Program Studi - Enum)
+### Prodi (Program Studi - Enum & Master Data)
 
-- Informatika, Pangan, Industri, Mesin, Lingkungan, Perencanaan Wilayah Kota
+- Informatika (TIF), Pangan (TP), Industri (TI), Mesin (TMI), Lingkungan (TL), Perencanaan Wilayah Kota (PWK)
 
 ---
 
@@ -214,8 +238,11 @@ php -d memory_limit=2G artisan test
 
 ### Test Coverage
 
-- **14 Feature Test files** covering all UCs
+- **109 Passed Tests (388 Assertions)** across 20 Feature Test files
 - Authentication & authorization
+- Notifications API & automated event triggers
+- System settings & Master data API
+- QC performance reports & user activity tracking
 - CRUD operations
 - Security features (rate limiting, lockout)
 - Audit logging
@@ -227,6 +254,7 @@ php -d memory_limit=2G artisan test
 
 | Version  | Released   | Features                                                   |
 | -------- | ---------- | ---------------------------------------------------------- |
+| **v4.0** | 2026-07-28 | Master Backend Revision API: Notifications, Settings, Master Data (Prodi & DocumentTypes), QC Performance Report, Automatic Event Triggers |
 | **v3.1** | 2026-07-21 | PHP 8.5.8 compatibility upgrade & Composer dependency update |
 | **v3.0** | 2026-07-18 | Session-based Sanctum authentication (Stateful SPA auth)   |
 | **v2.2** | 2026-01-28 | Rate limiting, account lockout, enhanced audit logging     |
@@ -334,4 +362,4 @@ For questions or issues:
 - Performance optimized
 - Token-based auth (stateless)
 
-**Last Updated:** 2026-07-21
+**Last Updated:** 2026-07-28

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,5 +32,11 @@ class AppServiceProvider extends ServiceProvider
 
         // Prevent silently discarding attributes that are not in $fillable
         Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
+
+        // Event listener registration
+        Event::listen(
+            \App\Events\DocumentStatusChanged::class,
+            \App\Listeners\CreateNotificationOnDocumentStatusChanged::class
+        );
     }
 }

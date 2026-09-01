@@ -2,21 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkActionRequest;
 use App\Http\Requests\UpdateDocumentRequest;
 use App\Http\Requests\UploadDocumentRequest;
-use App\Http\Requests\VerifyDocumentRequest;
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Services\DocumentService;
-use App\Enums\AuditAction;
-use App\Enums\ModelType;
 use App\Enums\DocumentStatus;
-use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use ZipArchive;
 use OpenApi\Attributes as OA;
 
 class DocumentController extends Controller
@@ -58,52 +53,13 @@ class DocumentController extends Controller
     {
         $this->authorize('viewAny', Document::class);
 
-        $query = Document::with(['uploader', 'verifier']);
+        $perPage = min((int) $request->input('per_page', 15), 100);
 
-        // Filter by document type
-        if ($request->has('document_type')) {
-            $query->where('document_type', $request->input('document_type'));
-        }
+        // Uploader only sees their own documents (API Contract requirement)
+        $user = auth()->user();
+        $uploaderId = $user->hasRole('uploader') ? $user->id : null;
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
-        }
-
-        // Filter by prodi
-        if ($request->has('prodi')) {
-            $query->where('prodi', 'like', "%{$request->input('prodi')}%");
-        }
-
-        // Search by all fields
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('file_name', 'like', "%{$search}%")
-                    ->orWhere('tahun_ajaran', 'like', "%{$search}%")
-                    ->orWhere('mata_kuliah', 'like', "%{$search}%")
-                    ->orWhere('npm', 'like', "%{$search}%")
-                    ->orWhere('document_type', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%");
-            });
-        }
-
-        // Sorting
-        $allowedSorts = ['created_at', 'updated_at', 'tahun_lulus', 'status', 'document_type', 'prodi', 'file_name'];
-        $sortBy = $request->input('sort_by', 'created_at');
-        $sortDirection = $request->input('sort_direction', 'desc');
-
-        if (!in_array($sortBy, $allowedSorts)) {
-            $sortBy = 'created_at';
-        }
-
-        if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
-            $sortDirection = 'desc';
-        }
-
-        // Pagination
-        $perPage = $request->input('per_page', 15);
-        $documents = $query->orderBy($sortBy, $sortDirection)->paginate($perPage);
+        $documents = $this->documentService->listDocuments($request->all(), $perPage, $uploaderId);
 
         return response()->json([
             'message' => 'Daftar dokumen berhasil diambil.',
@@ -211,194 +167,51 @@ class DocumentController extends Controller
     }
 
     /**
-     * Download the specified document.
+     * Update the specified document.
      */
-    #[OA\Get(
-        path: '/api/documents/{id}/download',
-        operationId: 'downloadDocument',
-        summary: 'Download Document (UC-10)',
-        description: "Download file dokumen.\n\n**Aturan akses download:**\n- Dokumen **terverifikasi**: semua role bisa download\n- Dokumen **belum terverifikasi**:\n  - Manager: bisa download semua dokumen\n  - Uploader: hanya dokumen miliknya sendiri\n  - QC: hanya dokumen pending (untuk verifikasi)\n  - SBAP: tidak bisa download",
+    #[OA\Put(
+        path: '/api/documents/{id}',
+        operationId: 'updateDocument',
+        summary: 'Update Document (UC-06)',
+        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
             new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
         ],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/UpdateDocumentRequest')),
         responses: [
-            new OA\Response(response: 200, description: 'File PDF', content: new OA\MediaType(mediaType: 'application/pdf', schema: new OA\Schema(type: 'string', format: 'binary'))),
+            new OA\Response(response: 200, description: 'Dokumen berhasil diperbarui', content: new OA\JsonContent(ref: '#/components/schemas/DocumentResponse')),
             new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
             new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
             new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Not Found.')])),
+            new OA\Response(response: 422, description: 'Dokumen yang sudah terverifikasi tidak dapat diperbarui', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
         ]
     )]
-    public function download(Document $document)
-    {
-        $this->authorize('download', $document);
+    public function update(
+        UpdateDocumentRequest $request,
+        Document $document
+    ): JsonResponse {
+        $this->authorize('update', $document);
 
-        // Check if file exists
-        if (!Storage::disk('public')->exists($document->file_path)) {
-            abort(404, 'File tidak ditemukan.');
+        try {
+            $updated = $this->documentService->updateDocument(
+                $document,
+                $request->validated(),
+                auth()->id()
+            );
+
+            return response()->json([
+                'message' => 'Dokumen berhasil diperbarui. Status direset ke menunggu verifikasi.',
+                'data' => new DocumentResource($updated),
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
         }
-
-        // Log download activity
-        AuditLog::log(
-            action: AuditAction::DOWNLOAD_DOCUMENT->value,
-            description: "Dokumen '{$document->file_name}' diunduh.",
-            metadata: [
-                'document_id' => $document->id,
-                'document_type' => $document->document_type->value,
-                'file_name' => $document->file_name,
-                'prodi' => $document->prodi->value,
-            ],
-            modelType: ModelType::DOCUMENT->value,
-            modelId: $document->id
-        );
-
-        // Stream file with proper headers
-        return Storage::disk('public')->download(
-            $document->file_path,
-            $document->file_name,
-            [
-                'Content-Type' => 'application/pdf',
-            ]
-        );
     }
-
-    /**
-     * Download multiple documents as ZIP
-     */
-    #[OA\Post(
-        path: '/api/documents/download-multiple',
-        operationId: 'downloadMultipleDocuments',
-        summary: 'Download Multiple Documents (ZIP)',
-        description: "Download beberapa dokumen sekaligus dalam format ZIP.\n\nAkses download sesuai dengan policy:\n- Manager: semua dokumen\n- Uploader: dokumen milik sendiri\n- QC: dokumen pending (untuk verifikasi)\n- SBAP: dokumen terverifikasi saja",
-        security: [['cookieAuth' => []]],
-        tags: ['Documents'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/DeleteMultipleRequest')),
-        responses: [
-            new OA\Response(response: 200, description: 'File ZIP berisi dokumen', content: new OA\MediaType(mediaType: 'application/zip', schema: new OA\Schema(type: 'string', format: 'binary'))),
-            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
-            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
-            new OA\Response(response: 422, description: 'Validation Error', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
-        ]
-    )]
-    public function downloadMultiple(Request $request)
-    {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:documents,id',
-        ]);
-
-        $documentIds = $request->input('ids');
-        $documents = Document::whereIn('id', $documentIds)->get();
-
-        // Check authorization for each document
-        foreach ($documents as $document) {
-            $this->authorize('download', $document);
-        }
-
-        // Create temporary zip file
-        $zipFileName = 'documents_' . now()->format('YmdHis') . '.zip';
-        $zipPath = storage_path('app/temp/' . $zipFileName);
-
-        // Ensure temp directory exists
-        if (!file_exists(storage_path('app/temp'))) {
-            mkdir(storage_path('app/temp'), 0755, true);
-        }
-
-        $zip = new ZipArchive();
-        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            abort(500, 'Gagal membuat file ZIP');
-        }
-
-        // Add files to zip
-        foreach ($documents as $document) {
-            $filePath = Storage::disk('public')->path($document->file_path);
-
-            if (file_exists($filePath)) {
-                // Add file with original name (handle duplicates)
-                $fileName = $document->file_name;
-                $counter = 1;
-
-                while ($zip->locateName($fileName) !== false) {
-                    $pathInfo = pathinfo($document->file_name);
-                    $fileName = $pathInfo['filename'] . '_' . $counter . '.' . $pathInfo['extension'];
-                    $counter++;
-                }
-
-                $zip->addFile($filePath, $fileName);
-            }
-        }
-
-        $zip->close();
-
-        // Log download activity
-        AuditLog::log(
-            action: AuditAction::DOWNLOAD_DOCUMENT->value,
-            description: "Mengunduh " . count($documents) . " dokumen sebagai ZIP.",
-            metadata: [
-                'document_ids' => $documentIds,
-                'total_files' => count($documents),
-            ]
-        );
-
-        // Return zip file and delete after download
-        return response()->download($zipPath, $zipFileName)->deleteFileAfterSend(true);
-    }
-
-    /**
-     * View the specified document inline (PDF Viewer).
-     */
-    #[OA\Get(
-        path: '/api/documents/{id}/view',
-        operationId: 'viewDocument',
-        summary: 'View Document Inline (PDF Viewer)',
-        description: "Menampilkan file dokumen secara inline (untuk PDF viewer di browser).\n\nSemua user yang terautentikasi dapat melihat dokumen.",
-        security: [['cookieAuth' => []]],
-        tags: ['Documents'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
-        ],
-        responses: [
-            new OA\Response(response: 200, description: 'File PDF inline', content: new OA\MediaType(mediaType: 'application/pdf', schema: new OA\Schema(type: 'string', format: 'binary'))),
-            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
-            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
-            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Not Found.')])),
-        ]
-    )]
-    public function view(Document $document)
-    {
-        $this->authorize('view', $document);
-
-        // Check if file exists
-        if (!Storage::disk('public')->exists($document->file_path)) {
-            abort(404, 'File tidak ditemukan.');
-        }
-
-        // Log view activity
-        AuditLog::log(
-            action: AuditAction::VIEW_DOCUMENT->value,
-            description: "Dokumen '{$document->file_name}' dilihat.",
-            metadata: [
-                'document_id' => $document->id,
-                'document_type' => $document->document_type->value,
-                'file_name' => $document->file_name,
-                'prodi' => $document->prodi->value,
-            ],
-            modelType: ModelType::DOCUMENT->value,
-            modelId: $document->id
-        );
-
-        // Stream file inline
-        return Storage::disk('public')->response(
-            $document->file_path,
-            $document->file_name,
-            [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="' . $document->file_name . '"',
-            ]
-        );
-    }
-
 
     /**
      * Remove the specified document.
@@ -458,10 +271,9 @@ class DocumentController extends Controller
             new OA\Response(response: 422, description: 'Validation Error', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
         ]
     )]
-    public function destroyMultiple(Request $request): JsonResponse
+    public function destroyMultiple(BulkActionRequest $request): JsonResponse
     {
         $request->validate([
-            'ids' => 'required|array',
             'ids.*' => 'exists:documents,id',
         ]);
 
@@ -480,149 +292,6 @@ class DocumentController extends Controller
             'message' => count($documents) . ' dokumen berhasil dihapus.',
             'deleted_count' => count($documents),
         ], 200);
-    }
-
-    /**
-     * Update the specified document.
-     */
-    #[OA\Put(
-        path: '/api/documents/{id}',
-        operationId: 'updateDocument',
-        summary: 'Update Document (UC-06)',
-        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
-        security: [['cookieAuth' => []]],
-        tags: ['Documents'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
-        ],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/UpdateDocumentRequest')),
-        responses: [
-            new OA\Response(response: 200, description: 'Dokumen berhasil diperbarui', content: new OA\JsonContent(ref: '#/components/schemas/DocumentResponse')),
-            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
-            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
-            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Not Found.')])),
-            new OA\Response(response: 422, description: 'Dokumen yang sudah terverifikasi tidak dapat diperbarui', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
-        ]
-    )]
-    public function update(
-        UpdateDocumentRequest $request,
-        Document $document
-    ): JsonResponse {
-        $this->authorize('update', $document);
-
-        try {
-            $updated = $this->documentService->updateDocument(
-                $document,
-                $request->validated(),
-                auth()->id()
-            );
-
-            return response()->json([
-                'message' => 'Dokumen berhasil diperbarui. Status direset ke menunggu verifikasi.',
-                'data' => new DocumentResource($updated),
-            ], 200);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => $e->errors(),
-            ], 422);
-        }
-    }
-
-    /**
-     * Display pending documents awaiting verification.
-     */
-    #[OA\Get(
-        path: '/api/documents/pending',
-        operationId: 'listPendingDocuments',
-        summary: 'List Pending Documents (UC-08)',
-        description: 'Mengambil daftar dokumen yang menunggu verifikasi (Manager & QC only)',
-        security: [['cookieAuth' => []]],
-        tags: ['Documents'],
-        parameters: [
-            new OA\Parameter(name: 'per_page', in: 'query', description: 'Jumlah data per halaman', schema: new OA\Schema(type: 'integer', default: 15)),
-            new OA\Parameter(name: 'page', in: 'query', description: 'Nomor halaman', schema: new OA\Schema(type: 'integer', default: 1)),
-        ],
-        responses: [
-            new OA\Response(response: 200, description: 'Daftar dokumen pending berhasil diambil', content: new OA\JsonContent(ref: '#/components/schemas/DocumentListResponse')),
-            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
-            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
-        ]
-    )]
-    public function pending(Request $request): JsonResponse
-    {
-        $this->authorize('viewPending', Document::class);
-
-        $query = Document::with(['uploader'])
-            ->where('status', DocumentStatus::PENDING->value)
-            ->orderBy('created_at', 'asc');
-
-        // Pagination
-        $perPage = $request->input('per_page', 15);
-        $documents = $query->paginate($perPage);
-
-        return response()->json([
-            'message' => 'Daftar dokumen menunggu verifikasi.',
-            'data' => DocumentResource::collection($documents),
-            'meta' => [
-                'current_page' => $documents->currentPage(),
-                'last_page' => $documents->lastPage(),
-                'per_page' => $documents->perPage(),
-                'total' => $documents->total(),
-            ],
-        ], 200);
-    }
-
-    /**
-     * Verify or reject a document.
-     */
-    #[OA\Patch(
-        path: '/api/documents/{id}/verify',
-        operationId: 'verifyDocument',
-        summary: 'Verify Document (UC-08)',
-        description: "Verifikasi atau tolak dokumen (Manager & QC only).\n\nDokumen yang sudah terverifikasi sebelumnya tidak dapat diverifikasi ulang.",
-        security: [['cookieAuth' => []]],
-        tags: ['Documents'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
-        ],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/VerifyDocumentRequest')),
-        responses: [
-            new OA\Response(response: 200, description: 'Dokumen berhasil diverifikasi/ditolak', content: new OA\JsonContent(ref: '#/components/schemas/DocumentResponse')),
-            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
-            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
-            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Not Found.')])),
-            new OA\Response(response: 422, description: 'Dokumen sudah diverifikasi sebelumnya', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
-        ]
-    )]
-    public function verify(
-        VerifyDocumentRequest $request,
-        Document $document
-    ): JsonResponse {
-        $this->authorize('verify', $document);
-
-        try {
-            $verified = $this->documentService->verifyDocument(
-                $document,
-                $request->input('status'),
-                $request->input('verification_note'),
-                auth()->id()
-            );
-
-            $message = $verified->status === DocumentStatus::VERIFIED
-                ? 'Dokumen berhasil diverifikasi.'
-                : 'Dokumen ditolak.';
-
-            return response()->json([
-                'message' => $message,
-                'data' => new DocumentResource($verified),
-            ], 200);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => $e->errors(),
-            ], 422);
-        }
     }
 
     /**
@@ -652,4 +321,105 @@ class DocumentController extends Controller
             'data' => $stats,
         ], 200);
     }
+
+    /**
+     * Display a listing of soft-deleted documents (Manager only).
+     */
+    #[OA\Get(
+        path: '/api/documents/trashed',
+        operationId: 'listTrashedDocuments',
+        summary: 'List Trashed Documents',
+        description: 'Mengambil daftar dokumen yang ada di tempat sampah (Manager only)',
+        security: [['cookieAuth' => []]],
+        tags: ['Documents'],
+        responses: [
+            new OA\Response(response: 200, description: 'Daftar dokumen terhapus berhasil diambil', content: new OA\JsonContent(ref: '#/components/schemas/DocumentListResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
+            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
+        ]
+    )]
+    public function trashed(Request $request): JsonResponse
+    {
+        $this->authorize('viewTrashed', Document::class);
+
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $documents = $this->documentService->getTrashedDocuments($request->all(), $perPage);
+
+        return response()->json([
+            'message' => 'Daftar dokumen terhapus berhasil diambil.',
+            'data' => DocumentResource::collection($documents),
+            'meta' => [
+                'current_page' => $documents->currentPage(),
+                'last_page' => $documents->lastPage(),
+                'per_page' => $documents->perPage(),
+                'total' => $documents->total(),
+            ],
+        ], 200);
+    }
+
+    /**
+     * Restore a soft-deleted document (Manager only).
+     */
+    #[OA\Post(
+        path: '/api/documents/{id}/restore',
+        operationId: 'restoreDocument',
+        summary: 'Restore Trashed Document',
+        description: 'Memulihkan dokumen yang terhapus kembali ke status semula (Manager only)',
+        security: [['cookieAuth' => []]],
+        tags: ['Documents'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Dokumen berhasil dipulihkan', content: new OA\JsonContent(ref: '#/components/schemas/DocumentResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
+            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
+            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Dokumen tidak ditemukan.')])),
+        ]
+    )]
+    public function restore(int $id): JsonResponse
+    {
+        $document = Document::onlyTrashed()->findOrFail($id);
+        $this->authorize('restore', $document);
+
+        $restored = $this->documentService->restoreDocument($id, auth()->id());
+
+        return response()->json([
+            'message' => 'Dokumen berhasil dipulihkan.',
+            'data' => new DocumentResource($restored),
+        ], 200);
+    }
+
+    /**
+     * Permanently delete a document and its file (Manager only).
+     */
+    #[OA\Delete(
+        path: '/api/documents/{id}/force-delete',
+        operationId: 'forceDeleteDocument',
+        summary: 'Force Delete Document',
+        description: 'Menghapus dokumen dan file fisiknya secara permanen (Manager only)',
+        security: [['cookieAuth' => []]],
+        tags: ['Documents'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Dokumen berhasil dihapus permanen', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Dokumen berhasil dihapus permanen.')])),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
+            new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
+            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Dokumen tidak ditemukan.')])),
+        ]
+    )]
+    public function forceDestroy(int $id): JsonResponse
+    {
+        $document = Document::withTrashed()->findOrFail($id);
+        $this->authorize('forceDelete', $document);
+
+        $this->documentService->forceDeleteDocument($document);
+
+        return response()->json([
+            'message' => 'Dokumen berhasil dihapus permanen.',
+        ], 200);
+    }
 }
+

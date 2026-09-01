@@ -23,6 +23,7 @@ class User extends Authenticatable
         'nip',
         'password',
         'role',
+        'last_seen_at',
     ];
 
 
@@ -45,6 +46,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_seen_at' => 'datetime',
+            'password' => 'hashed',
             'role' => UserRole::class,
         ];
     }
@@ -84,5 +87,13 @@ class User extends Authenticatable
     public function auditLogs()
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    /**
+     * Get the notifications for the user.
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
     }
 }

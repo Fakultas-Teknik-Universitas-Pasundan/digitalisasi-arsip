@@ -1,27 +1,30 @@
 # 📋 Panduan Testing API dengan Postman
 
-## ✅ Status: UPDATED v3.0 (Token-Based Auth / Bearer Token)
+## ✅ Status: UPDATED v4.0 (Master Backend Revision API)
 
 | UC           | Fitur                              | Tests | Status      |
 | ------------ | ---------------------------------- | ----- | ----------- |
-| UC-01        | User Management                    | 6/6   | ✅ UPDATED  |
+| UC-01        | User Management                    | 16/16 | ✅ UPDATED  |
 | UC-02        | View Documents                     | 2/2   | ✅ PASSED   |
 | UC-03        | Audit Log                          | 5/5   | ✅ PASSED   |
 | UC-04        | Document Upload                    | 7/7   | ✅ PASSED   |
 | UC-05        | View Status                        | 1/1   | ✅ PASSED   |
 | UC-06        | Document Update                    | 3/3   | ✅ PASSED   |
-| UC-07        | Document Delete                    | 3/3   | ✅ PASSED   |
-| UC-08        | Document Verification              | 4/4   | ✅ PASSED   |
+| UC-07        | Document Delete, Trash & Restore   | 9/9   | ✅ ENHANCED |
+| UC-08        | Document Verification              | 16/16 | ✅ PASSED   |
 | UC-09        | Search Documents                   | 4/4   | ✅ PASSED   |
-| UC-10        | Document Download                  | 3/3   | ✅ PASSED   |
-| UC-11        | **Dashboard & Export**             | 2/2   | ✅ NEW!     |
-| UC-12        | **Unique Validation**              | 3/3   | ✅ NEW!     |
+| UC-10        | Document Download & Bulk ZIP       | 7/7   | ✅ PASSED   |
+| UC-11        | Dashboard & Export                 | 5/5   | ✅ PASSED   |
+| UC-12        | Unique Validation                  | 3/3   | ✅ PASSED   |
+| UC-13        | **System Notifications**           | 5/5   | ✅ NEW v4.0!|
+| UC-14        | **System Settings**                | 3/3   | ✅ NEW v4.0!|
+| UC-15        | **Master Data (Prodi & Tipe)**     | 3/3   | ✅ NEW v4.0!|
+| UC-16        | **QC Performance & Activity**      | 2/2   | ✅ NEW v4.0!|
 | **Security** | Rate Limit, Account Lockout, Audit | 8/8   | ✅ ENHANCED |
 
-**Total Tests:** 50+ | **Security Level:** Production-Ready 🔒
-**API Version:** v3.0 - Token-Based Auth (Bearer Token)
-**Payload Optimization:** ~40% smaller responses
-**Authentication:** Sanctum Token-Based (Bearer Token)
+**Total Tests:** 126 Passed (438 Assertions) | **Security Level:** Production-Ready 🔒
+**API Version:** v4.0 - Master Backend Revision API
+**Authentication:** Sanctum Token-Based (Bearer Token) / SPA Session Auth
 
 ---
 
@@ -1164,6 +1167,62 @@ Authorization: Bearer {{auth_token}}
 
 ---
 
+### ✅ 7.4 Daftar Dokumen Terhapus (Trash - Login: Manager)
+
+```
+GET http://localhost:8000/api/documents/trashed
+
+Headers:
+Authorization: Bearer {{auth_token_manager}}
+```
+
+**Expected:** Daftar dokumen yang berada di tempat sampah (*soft-deleted*).
+**Status:** `200 OK`
+
+---
+
+### ✅ 7.5 Pulihkan Dokumen dari Tempat Sampah (Restore - Login: Manager)
+
+```
+POST http://localhost:8000/api/documents/{id_soft_deleted}/restore
+
+Headers:
+Authorization: Bearer {{auth_token_manager}}
+```
+
+**Expected:**
+```json
+{
+    "message": "Dokumen berhasil dipulihkan.",
+    "data": {
+        "id": 12,
+        "file_name": "Nilai_Web.pdf"
+    }
+}
+```
+**Status:** `200 OK`
+
+---
+
+### ✅ 7.6 Hapus Dokumen Permanen & File Fisik (Force Delete - Login: Manager)
+
+```
+DELETE http://localhost:8000/api/documents/{id_soft_deleted}/force-delete
+
+Headers:
+Authorization: Bearer {{auth_token_manager}}
+```
+
+**Expected:**
+```json
+{
+    "message": "Dokumen berhasil dihapus permanen."
+}
+```
+**Status:** `200 OK`
+
+---
+
 ## 🔍 UC-09: Search & Filter Documents (Login: Any Role)
 
 ### ✅ 9.1 Search by File Name
@@ -1644,13 +1703,197 @@ Body: { "nip": "1234567890", ... }
 
 ---
 
+## 🔔 UC-13: System Notifications (`/api/notifications`)
+
+### 13.1 List User Notifications
+```
+GET http://localhost:8000/api/notifications?per_page=15&unread_only=true
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+**Expected Response (200 OK):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "9b1deb4d-3b7d-4148-9f2d-0b89f816a1c8",
+      "user_id": 2,
+      "title": "Dokumen Diverifikasi",
+      "message": "Dokumen KTI_2026.pdf telah diverifikasi dan disetujui.",
+      "type": "success",
+      "action_url": "/documents/1",
+      "read_at": null,
+      "created_at": "2026-07-28T02:00:00.000000Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 15,
+    "total": 1,
+    "unread_count": 1
+  }
+}
+```
+
+### 13.2 Unread Count Badge
+```
+GET http://localhost:8000/api/notifications/unread-count
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+**Expected Response (200 OK):**
+```json
+{
+  "status": "success",
+  "unread_count": 1
+}
+```
+
+### 13.3 Mark Single Notification as Read
+```
+PATCH http://localhost:8000/api/notifications/{notification_id}/read
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+
+### 13.4 Mark All Notifications as Read
+```
+POST http://localhost:8000/api/notifications/mark-all-read
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+
+---
+
+## ⚙️ UC-14: System Settings (`/api/system-settings`)
+
+### 14.1 List System Settings
+```
+GET http://localhost:8000/api/system-settings?group=storage
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+**Expected Response (200 OK):**
+```json
+{
+  "status": "success",
+  "data": {
+    "max_upload_size_mb": "10",
+    "allowed_file_types": "pdf,jpg,png"
+  }
+}
+```
+
+### 14.2 Bulk Update Settings (Manager Only)
+```
+PUT http://localhost:8000/api/system-settings
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Content-Type: application/json
+  Accept: application/json
+
+Body (raw JSON):
+{
+  "settings": [
+    {
+      "key": "max_upload_size_mb",
+      "value": "20"
+    }
+  ]
+}
+```
+
+---
+
+## 📚 UC-15: Master Data (`/api/prodis` & `/api/document-types`)
+
+### 15.1 Get Active Prodis
+```
+GET http://localhost:8000/api/prodis
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+
+### 15.2 Create New Prodi (Manager Only)
+```
+POST http://localhost:8000/api/prodis
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Content-Type: application/json
+  Accept: application/json
+
+Body (raw JSON):
+{
+  "code": "TKS",
+  "name": "Teknik Kuantum",
+  "degree": "S1"
+}
+```
+
+### 15.3 Get Document Types
+```
+GET http://localhost:8000/api/document-types
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+
+---
+
+## 📊 UC-16: QC Performance Report & User Activity (`/api/reports/qc-performance`)
+
+### 16.1 Get QC Performance Report
+```
+GET http://localhost:8000/api/reports/qc-performance?page=1&per_page=10
+Headers:
+  Authorization: Bearer {{auth_token}}
+  Accept: application/json
+```
+**Expected Response (200 OK):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 3,
+      "staff": "Budi Santoso",
+      "email": "budi.qc@unpas.ac.id",
+      "role": "Tim Quality Control",
+      "terverifikasi": 65,
+      "ditolak": 1,
+      "false_rejections_count": 0,
+      "avg_time": "1.2 Hari",
+      "accuracy_rate": "98.5%",
+      "is_online": true,
+      "last_seen_at": "2026-07-28T02:00:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 10,
+    "total": 1
+  }
+}
+```
+
+---
+
 ## 📝 Quick Testing Checklist
 
 ### Before Testing:
 
 - [ ] Server Laravel running (`php artisan serve`)
 - [ ] Database migrated (`php artisan migrate`)
-- [ ] **Data Seeded** (`php artisan db:seed --class=DocumentSeeder`)
+- [ ] **Data Seeded** (`php artisan db:seed`)
 - [ ] Postman environment created with `auth_token` variable
 
 ### Authentication Flow:
@@ -1658,40 +1901,34 @@ Body: { "nip": "1234567890", ... }
 - [ ] POST `/api/auth/login` → Save Bearer Token
 - [ ] GET `/api/auth/me` → Verify token works
 - [ ] POST `/api/auth/logout` → Revoke token
-- [ ] POST `/api/auth/logout-all` → Revoke all tokens
 
-### Core Features:
+### Core & Revision Features:
 
 - [ ] User Management (Manager only)
 - [ ] Document Upload (Uploader)
-- [ ] Document Verification (QC)
-- [ ] Document Download (SBAP/Manager)
-- [ ] Audit Logs (Manager only)
-
-### Response Validation:
-
-- [ ] Check new response format (`uploaded_by_name`, `verified_by_name`, `user_name`)
-- [ ] Verify no nested user objects in responses
-- [ ] Confirm smaller payload sizes
+- [ ] Document Verification & Notification Trigger (QC)
+- [ ] Notifications API (All Users)
+- [ ] System Settings API (Manager update)
+- [ ] Master Data Prodis & Document Types (All Users)
+- [ ] QC Performance Report & Online Status (Manager)
 
 ---
 
 ## ✅ Testing Selesai!
 
-**API Version:** v3.0 - Token-Based Auth (Bearer Token)
-**Last Updated:** 23 Februari 2026
+**API Version:** v4.0 - Master Backend Revision API
+**Last Updated:** 28 Juli 2026
 **Security Level:** Production-Ready 🔒
-**Total Tests:** 50+ skenario untuk 12 Use Cases + Security Features
+**Total Tests:** 109 Passed (388 Assertions)
 **Performance:** ~40% smaller API responses
 
-### Key Improvements in v3.0:
+### Key Improvements in v4.0:
 
-- ✅ **Token-Based Auth** (Bearer Token, stateless)
-- ✅ **Logout All Devices** (`/api/auth/logout-all`)
-- ✅ **Token Expiration** (24 jam, configurable)
-- ✅ Dashboard Statistics & Reporting
-- ✅ Dual-Layer Rate Limiting (IP + Account-based)
-- ✅ Account Lockout Protection
-- ✅ Comprehensive Audit Logging
+- ✅ **Notifications API & Event Triggers** (`/api/notifications`)
+- ✅ **System Settings API** (`/api/system-settings`)
+- ✅ **Master Data Prodis & Document Types** (`/api/prodis`, `/api/document-types`)
+- ✅ **QC Verifier Performance Report & Online Activity (`last_seen_at`)**
+- ✅ **Extended Document Statistics (`by_document_type`) & Multi-Criteria Filters**
+- ✅ **Dual-Layer Rate Limiting & Lockout Protection**
 
 **Security Features:** Rate Limit | Account Lockout | PDF Validation | Bearer Token Auth | CORS | Audit Logs
