@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
-use App\Enums\DocumentStatus;
 use App\Enums\AuditAction;
+use App\Enums\DocumentStatus;
+use App\Enums\UserRole;
+use App\Exports\ReportExport;
 use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
-// We will need export classes later, defined in App\Exports namespace
 
 class ReportService
 {
@@ -28,16 +29,17 @@ class ReportService
         $data['period'] = [
             'start' => $startDate->format('d F Y'),
             'end' => $endDate->format('d F Y'),
-            'range' => $startDate->format('Y-m-d') . ' - ' . $endDate->format('Y-m-d'),
+            'range' => $startDate->format('Y-m-d').' - '.$endDate->format('Y-m-d'),
         ];
         $data['style'] = $params['style'] ?? 'detailed';
+        $filename = sprintf('laporan_%s_%s_%s', $params['type'] ?? 'custom', $startDate->toDateString(), $endDate->toDateString());
 
         if ($format === 'pdf') {
             return $this->generatePdf($data);
         } elseif ($format === 'xlsx') {
-            return $this->generateExcel($data);
+            return $this->generateExcel($data, $filename.'.xlsx');
         } elseif ($format === 'csv') {
-            return $this->generateCsv($data);
+            return $this->generateCsv($data, $filename.'.csv');
         }
 
         throw new \InvalidArgumentException("Format laporan tidak didukung: $format");
@@ -106,7 +108,7 @@ class ReportService
 
     public function getQcPerformanceReport(Carbon $start, Carbon $end, int $perPage = 10, int $page = 1)
     {
-        $usersQuery = User::whereIn('role', [\App\Enums\UserRole::QC->value, \App\Enums\UserRole::MANAGER->value])
+        $usersQuery = User::whereIn('role', [UserRole::QC->value, UserRole::MANAGER->value])
             ->orderBy('name', 'asc');
 
         $paginated = $usersQuery->paginate($perPage, ['*'], 'page', $page);
@@ -139,8 +141,8 @@ class ReportService
 
                 $avgHours = round(($totalMinutes / $verifiedDocs->count()) / 60.0, 1);
                 $avgTime = $avgHours >= 24
-                    ? round($avgHours / 24, 1) . ' Hari'
-                    : $avgHours . ' Jam';
+                    ? round($avgHours / 24, 1).' Hari'
+                    : $avgHours.' Jam';
             } else {
                 $avgTime = '-';
             }
@@ -149,12 +151,12 @@ class ReportService
                 'id' => $staff->id,
                 'staff' => $staff->name,
                 'email' => $staff->email,
-                'role' => $staff->role instanceof \App\Enums\UserRole ? $staff->role->label() : $staff->role,
+                'role' => $staff->role instanceof UserRole ? $staff->role->label() : $staff->role,
                 'terverifikasi' => $verifiedCount,
                 'ditolak' => $rejectedCount,
                 'false_rejections_count' => 0,
                 'avg_time' => $avgTime,
-                'accuracy_rate' => $accuracyRate . '%',
+                'accuracy_rate' => $accuracyRate.'%',
                 'is_online' => (bool) $isOnline,
                 'last_seen_at' => $staff->last_seen_at ? $staff->last_seen_at->toIso8601String() : null,
             ];
@@ -240,18 +242,36 @@ class ReportService
         // We need a blade view for this
         $pdf = app('dompdf.wrapper');
         $pdf->loadView('reports.generic', ['data' => $data]);
+
         return $pdf->download('report.pdf');
     }
 
-    protected function generateExcel(array $data)
+    protected function generateExcel(array $data, string $filename)
     {
-        // TODO: Implement Excel export using Maatwebsite\Excel
-        throw new \BadMethodCallException('Format laporan XLSX belum diimplementasi.');
+        return Excel::download(new ReportExport($data), $filename);
     }
 
-    protected function generateCsv(array $data)
+    protected function generateCsv(array $data, string $filename)
     {
-        // TODO: Implement CSV export
-        throw new \BadMethodCallException('Format laporan CSV belum diimplementasi.');
+        $rows = (new ReportExport($data))->rows();
+
+        $stream = fopen('php://temp', 'r+');
+        fwrite($stream, "\xEF\xBB\xBF");
+        foreach ($rows as $row) {
+            if ($row === []) {
+                fwrite($stream, "\r\n");
+
+                continue;
+            }
+            fputcsv($stream, $row, ';');
+        }
+        rewind($stream);
+
+        return response()->streamDownload(function () use ($stream) {
+            fpassthru($stream);
+            fclose($stream);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 }

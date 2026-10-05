@@ -24,6 +24,16 @@ import { toast } from "sonner";
 import { http } from "@/shared/lib/http";
 import { useQueryClient } from "@tanstack/react-query";
 
+// Backend has no dedicated rejection_reason field: the selected reason is
+// embedded into verification_note so the information is never lost.
+const REJECTION_REASON_LABELS: Record<string, string> = {
+  unclear_scan: "File Scan Tidak Jelas / Buram",
+  mismatch_data: "NIM / Nama Mahasiswa Tidak Cocok",
+  corrupt_file: "File Rusak / Tidak Bisa Dibuka",
+  wrong_type: "Kategori Dokumen Salah",
+  other: "Lainnya",
+};
+
 interface RejectDocumentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,9 +56,14 @@ export const RejectDocumentDialog: React.FC<RejectDocumentDialogProps> = ({
     try {
       setLoading(true);
       await http.patch(`/api/documents/${documentId}/verify`, {
-        status: "rejected",
-        rejection_reason: reason,
-        notes,
+        status: "tidak terverifikasi",
+        verification_note: [
+          REJECTION_REASON_LABELS[reason] ?? reason,
+          notes.trim(),
+        ]
+          .filter(Boolean)
+          .join(" - ")
+          .slice(0, 500),
       });
       toast.success("Dokumen ditolak!");
       queryClient.invalidateQueries({ queryKey: ["documents"] });

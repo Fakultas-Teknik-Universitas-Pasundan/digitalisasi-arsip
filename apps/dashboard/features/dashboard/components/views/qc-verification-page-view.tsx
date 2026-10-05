@@ -75,11 +75,11 @@ export function QCVerificationPageView() {
   }, [sortedPendingDocs]);
 
   const handleConfirmVerify = (id: number, note?: string) => {
-    verifyDocument({ id, status: "verified", note });
+    verifyDocument({ id, status: "terverifikasi", note });
   };
 
   const handleConfirmReject = (id: number, reason: string) => {
-    verifyDocument({ id, status: "rejected", note: reason });
+    verifyDocument({ id, status: "tidak terverifikasi", note: reason });
   };
 
   return (

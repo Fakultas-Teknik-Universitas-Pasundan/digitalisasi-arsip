@@ -82,7 +82,7 @@ export interface DocumentListResponse {
 }
 
 export interface VerifyDocumentPayload {
-  status: "verified" | "rejected";
+  status: "terverifikasi" | "tidak terverifikasi";
   verification_note?: string;
 }
 

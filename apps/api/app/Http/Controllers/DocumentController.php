@@ -35,7 +35,7 @@ class DocumentController extends Controller
         tags: ['Documents'],
         parameters: [
             new OA\Parameter(name: 'document_type', in: 'query', description: 'Filter berdasarkan tipe dokumen', schema: new OA\Schema(type: 'string', enum: ['nilai', 'transkrip', 'ijazah', 'berita_acara_sidang'])),
-            new OA\Parameter(name: 'status', in: 'query', description: 'Filter berdasarkan status', schema: new OA\Schema(type: 'string', enum: ['menunggu_verifikasi', 'terverifikasi', 'tidak_terverifikasi'])),
+            new OA\Parameter(name: 'status', in: 'query', description: 'Filter berdasarkan status. Gunakan nilai enum persis (huruf kecil, ber/spasi): `menunggu verifikasi` | `terverifikasi` | `tidak terverifikasi`. Catatan: field `status` pada respons mengembalikan label Title Case (mis. `Menunggu Verifikasi`), sedangkan filter menerima nilai enum.', schema: new OA\Schema(type: 'string', enum: ['menunggu verifikasi', 'terverifikasi', 'tidak terverifikasi'])),
             new OA\Parameter(name: 'prodi', in: 'query', description: 'Filter berdasarkan program studi', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'search', in: 'query', description: 'Cari berdasarkan nama file', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'sort_by', in: 'query', description: 'Kolom untuk sorting (default: created_at)', schema: new OA\Schema(type: 'string', default: 'created_at', enum: ['created_at', 'updated_at', 'tahun_lulus', 'status', 'document_type', 'prodi', 'file_name'])),
@@ -173,7 +173,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}',
         operationId: 'updateDocument',
         summary: 'Update Document (UC-06)',
-        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
+        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu verifikasi`.\nFile dan document_type tidak dapat diubah.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -220,7 +220,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}',
         operationId: 'deleteDocument',
         summary: 'Delete Document (UC-07)',
-        description: "Menghapus dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
+        description: "Menghapus dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -251,7 +251,7 @@ class DocumentController extends Controller
         path: '/api/documents/delete-multiple',
         operationId: 'deleteMultipleDocuments',
         summary: 'Delete Multiple Documents',
-        description: "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
+        description: "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/DeleteMultipleRequest')),
