@@ -20,7 +20,7 @@ class AuthController extends Controller
      * Get CSRF Cookie.
      */
     #[OA\Get(
-        path: '/api/csrf-cookie',
+        path: '/sanctum/csrf-cookie',
         operationId: 'getCsrfCookie',
         summary: 'Get CSRF Cookie',
         description: 'Mengambil CSRF cookie yang diperlukan untuk autentikasi. Cookie `XSRF-TOKEN` akan otomatis tersimpan.',

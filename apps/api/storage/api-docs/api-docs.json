@@ -2,7 +2,7 @@
     "openapi": "3.0.0",
     "info": {
         "title": "API Digitalisasi Arsip",
-        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan session-based authentication / Bearer Token.\n\n**Langkah autentikasi (Session):**\n1. GET `/api/csrf-cookie` untuk mendapatkan CSRF token\n2. POST `/api/auth/login` dengan credentials\n3. Sertakan cookie dan X-XSRF-TOKEN header pada setiap request\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
+        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan **stateful session (cookie-based) authentication**.\nTidak ada penerbitan Bearer Token; login mengembalikan objek user, bukan token.\n\n**Langkah autentikasi (Session):**\n1. GET `/sanctum/csrf-cookie` untuk mendapatkan cookie `XSRF-TOKEN`\n2. POST `/api/auth/login` dengan credentials (cookie sesi tersimpan otomatis)\n3. Sertakan cookie sesi dan header `X-XSRF-TOKEN` pada setiap request tulis (POST/PUT/PATCH/DELETE)\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
         "contact": {
             "name": "API Support"
         },
@@ -322,7 +322,7 @@
                 ]
             }
         },
-        "/api/csrf-cookie": {
+        "/sanctum/csrf-cookie": {
             "get": {
                 "tags": [
                     "Authentication"
@@ -584,13 +584,13 @@
                     {
                         "name": "status",
                         "in": "query",
-                        "description": "Filter berdasarkan status",
+                        "description": "Filter berdasarkan status. Gunakan nilai enum persis (huruf kecil, ber/spasi): `menunggu verifikasi` | `terverifikasi` | `tidak terverifikasi`. Catatan: field `status` pada respons mengembalikan label Title Case (mis. `Menunggu Verifikasi`), sedangkan filter menerima nilai enum.",
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "menunggu_verifikasi",
+                                "menunggu verifikasi",
                                 "terverifikasi",
-                                "tidak_terverifikasi"
+                                "tidak terverifikasi"
                             ]
                         }
                     },
@@ -906,7 +906,7 @@
                     "Documents"
                 ],
                 "summary": "Update Document (UC-06)",
-                "description": "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
+                "description": "Update metadata dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu verifikasi`.\nFile dan document_type tidak dapat diubah.",
                 "operationId": "updateDocument",
                 "parameters": [
                     {
@@ -1011,7 +1011,7 @@
                     "Documents"
                 ],
                 "summary": "Delete Document (UC-07)",
-                "description": "Menghapus dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
+                "description": "Menghapus dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
                 "operationId": "deleteDocument",
                 "parameters": [
                     {
@@ -1098,7 +1098,7 @@
                     "Documents"
                 ],
                 "summary": "Delete Multiple Documents",
-                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
+                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
                 "operationId": "deleteMultipleDocuments",
                 "requestBody": {
                     "required": true,
@@ -4102,12 +4102,12 @@
                 ],
                 "properties": {
                     "status": {
-                        "description": "Status verifikasi",
+                        "description": "Status verifikasi. Gunakan nilai enum persis (huruf kecil, spasi). Tidak menerima nilai `menunggu verifikasi`.",
                         "type": "string",
                         "example": "terverifikasi",
                         "enum": [
                             "terverifikasi",
-                            "tidak_terverifikasi"
+                            "tidak terverifikasi"
                         ]
                     },
                     "verification_note": {

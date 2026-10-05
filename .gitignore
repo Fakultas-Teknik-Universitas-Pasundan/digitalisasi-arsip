@@ -21,6 +21,9 @@ coverage
 # Vercel
 .vercel
 
+# Freebuff
+.freebuff
+
 # Build Outputs
 .next/
 out/

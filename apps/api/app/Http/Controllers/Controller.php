@@ -12,12 +12,13 @@ use OpenApi\Attributes as OA;
 REST API untuk sistem digitalisasi arsip akademik.
 
 ## Autentikasi
-API ini menggunakan Laravel Sanctum dengan session-based authentication / Bearer Token.
+API ini menggunakan Laravel Sanctum dengan **stateful session (cookie-based) authentication**.
+Tidak ada penerbitan Bearer Token; login mengembalikan objek user, bukan token.
 
 **Langkah autentikasi (Session):**
-1. GET `/api/csrf-cookie` untuk mendapatkan CSRF token
-2. POST `/api/auth/login` dengan credentials
-3. Sertakan cookie dan X-XSRF-TOKEN header pada setiap request
+1. GET `/sanctum/csrf-cookie` untuk mendapatkan cookie `XSRF-TOKEN`
+2. POST `/api/auth/login` dengan credentials (cookie sesi tersimpan otomatis)
+3. Sertakan cookie sesi dan header `X-XSRF-TOKEN` pada setiap request tulis (POST/PUT/PATCH/DELETE)
 
 ## Roles
 - **Manager**: Full access ke semua fitur
