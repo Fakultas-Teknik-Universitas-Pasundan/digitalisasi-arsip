@@ -69,6 +69,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/documents/{id}/restore', [DocumentController::class, 'restore']);
     Route::delete('/documents/{id}/force-delete', [DocumentController::class, 'forceDestroy']);
 
+    // Revoke Verification (Manager only): terverifikasi -> menunggu verifikasi
+    Route::post('/documents/{document}/revoke-verification', [DocumentController::class, 'revokeVerification']);
+
     // Document Management (UC-04, UC-06, UC-07) - CRUD operations
     Route::apiResource('documents', DocumentController::class);
 

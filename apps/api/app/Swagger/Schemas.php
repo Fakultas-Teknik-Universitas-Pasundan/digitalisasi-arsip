@@ -261,7 +261,7 @@ use OpenApi\Attributes as OA;
     required: ['status'],
     type: 'object',
     properties: [
-        new OA\Property(property: 'status', type: 'string', enum: ['terverifikasi', 'tidak_terverifikasi'], description: 'Status verifikasi', example: 'terverifikasi'),
+        new OA\Property(property: 'status', type: 'string', enum: ['terverifikasi', 'tidak terverifikasi'], description: 'Status verifikasi. Gunakan nilai enum persis (huruf kecil, spasi). Tidak menerima nilai `menunggu verifikasi`.', example: 'terverifikasi'),
         new OA\Property(property: 'verification_note', type: 'string', maxLength: 500, nullable: true, description: 'Catatan verifikasi (opsional, disarankan jika ditolak)', example: 'Format dokumen tidak sesuai standar.'),
     ]
 )]

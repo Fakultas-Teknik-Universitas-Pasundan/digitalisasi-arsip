@@ -5,16 +5,15 @@ namespace App\Services;
 use App\Enums\AuditAction;
 use App\Enums\ModelType;
 use App\Models\AuditLog;
+use App\Models\Document;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class UserService
 {
     /**
      * Create a new user.
-     *
-     * @param array $data
-     * @return User
      */
     public function createUser(array $data): User
     {
@@ -39,10 +38,6 @@ class UserService
 
     /**
      * Update an existing user.
-     *
-     * @param User $user
-     * @param array $data
-     * @return User
      */
     public function updateUser(User $user, array $data): User
     {
@@ -51,7 +46,7 @@ class UserService
         $oldValues = [];
 
         // Check password change
-        if (isset($data['password']) && !empty($data['password'])) {
+        if (isset($data['password']) && ! empty($data['password'])) {
             // Password will be auto-hashed by User model's 'hashed' cast
             $changedFields[] = 'password';
         } else {
@@ -82,13 +77,13 @@ class UserService
             $metadata['new_role'] = $user->role->value;
         }
 
-        if (!empty($oldValues)) {
+        if (! empty($oldValues)) {
             $metadata['old_values'] = $oldValues;
         }
 
         $description = "Pengguna {$user->name} ({$user->email}) diperbarui";
-        if (!empty($changedFields)) {
-            $description .= " - kolom yang diubah: " . implode(', ', $changedFields);
+        if (! empty($changedFields)) {
+            $description .= ' - kolom yang diubah: '.implode(', ', $changedFields);
         }
 
         AuditLog::log(
@@ -104,12 +99,19 @@ class UserService
 
     /**
      * Delete a user.
-     *
-     * @param User $user
-     * @return bool
      */
     public function deleteUser(User $user): bool
     {
+        // An uploader's documents are institutional archives and must never
+        // be deleted along with the account (documents.uploaded_by is
+        // ON DELETE RESTRICT). Block the deletion instead.
+        $documentCount = Document::where('uploaded_by', $user->id)->count();
+        if ($documentCount > 0) {
+            throw ValidationException::withMessages([
+                'user_id' => ["Pengguna masih memiliki {$documentCount} dokumen dan tidak dapat dihapus."],
+            ]);
+        }
+
         $userId = $user->id;
         $userName = $user->name;
         $userEmail = $user->email;
@@ -135,10 +137,9 @@ class UserService
 
         return $deleted;
     }
+
     /**
      * Get user statistics.
-     *
-     * @return array
      */
     public function getStatistics(): array
     {
@@ -162,16 +163,14 @@ class UserService
     /**
      * Get paginated list of users with optional filtering.
      *
-     * @param array $filters
-     * @param int $perPage
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @return LengthAwarePaginator
      */
     public function listUsers(array $filters = [], int $perPage = 15)
     {
         $query = User::query();
 
         // Search by name or email
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = addcslashes($filters['search'], '%_\\');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -180,7 +179,7 @@ class UserService
         }
 
         // Filter by role
-        if (!empty($filters['role'])) {
+        if (! empty($filters['role'])) {
             $query->where('role', $filters['role']);
         }
 

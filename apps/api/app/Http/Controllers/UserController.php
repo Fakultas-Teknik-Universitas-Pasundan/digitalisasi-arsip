@@ -10,8 +10,8 @@ use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
-use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -183,7 +183,7 @@ class UserController extends Controller
         path: '/api/users/{id}',
         operationId: 'deleteUser',
         summary: 'Delete User',
-        description: 'Menghapus user (tidak bisa menghapus akun sendiri)',
+        description: 'Menghapus user (tidak bisa menghapus akun sendiri). User yang masih memiliki dokumen arsip tidak dapat dihapus (422).',
         security: [['cookieAuth' => []]],
         tags: ['Users'],
         parameters: [
@@ -246,7 +246,7 @@ class UserController extends Controller
         path: '/api/users/delete-multiple',
         operationId: 'deleteMultipleUsers',
         summary: 'Delete Multiple Users',
-        description: 'Menghapus beberapa user sekaligus (Manager only). Tidak bisa menghapus akun sendiri.',
+        description: 'Menghapus beberapa user sekaligus (Manager only). Tidak bisa menghapus akun sendiri. Atomik: jika salah satu user masih memiliki dokumen, seluruh penghapusan dibatalkan (422).',
         security: [['cookieAuth' => []]],
         tags: ['Users'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/DeleteMultipleRequest')),
@@ -290,12 +290,16 @@ class UserController extends Controller
             $this->authorize('delete', $user);
         }
 
-        foreach ($users as $user) {
-            $this->userService->deleteUser($user);
-        }
+        // Atomic: either all deletable users are deleted or none, so a
+        // 422 from the document guard never leaves partial deletions.
+        DB::transaction(function () use ($users) {
+            foreach ($users as $user) {
+                $this->userService->deleteUser($user);
+            }
+        });
 
         return response()->json([
-            'message' => count($users) . ' pengguna berhasil dihapus.',
+            'message' => count($users).' pengguna berhasil dihapus.',
             'deleted_count' => count($users),
         ], 200);
     }

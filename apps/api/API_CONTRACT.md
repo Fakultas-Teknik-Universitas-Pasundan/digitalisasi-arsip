@@ -58,7 +58,6 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 ### A. Respons Sukses Single Object / Resource
 ```json
 {
-  "status": "success",
   "message": "Operasi berhasil dilakukan.",
   "data": { ... }
 }
@@ -67,7 +66,7 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 ### B. Respons Sukses List dengan Pagination
 ```json
 {
-  "status": "success",
+  "message": "Daftar berhasil diambil.",
   "data": [
     { ... },
     { ... }
@@ -80,6 +79,10 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
   }
 }
 ```
+
+> [!NOTE]
+> Bentuk **baku** respons sukses adalah `{ message, data }` (dan `meta` bila paginasi), **tanpa** field `status`.
+> Hanya beberapa endpoint master-data (`GET/POST /api/prodis`, `GET /api/document-types`, `GET/PUT /api/system-settings`) yang **tambahan** menyertakan `"status": "success"`. Klien tidak boleh bergantung pada keberadaan field `status`. 
 
 ### C. Respons Validasi Gagal (HTTP 422 Unprocessable Entity)
 ```json
@@ -120,9 +123,12 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * `berita_acara_sidang` — Berita Acara Sidang Sarjana (BAS)
 
 ### `DocumentStatus`
-* `menunggu_verifikasi` — Baru diunggah / Menunggu tinjauan QC
+* `menunggu verifikasi` — Baru diunggah / Menunggu tinjauan QC
 * `terverifikasi` — Disetujui oleh QC / Manager
-* `tidak_terverifikasi` — Ditolak oleh QC / Memerlukan perbaikan
+* `tidak terverifikasi` — Ditolak oleh QC / Memerlukan perbaikan
+
+> [!NOTE]
+> Nilai enum disimpan **dengan spasi** (contoh: `menunggu verifikasi`), bukan underscore. Gunakan nilai persis ini saat mengirim `status` (query filter maupun body verifikasi). Namun pada **respons** objek dokumen, field `status` ditampilkan sebagai **label** berhuruf kapital di awal (contoh: `"Tidak Terverifikasi"`), bukan nilai enum mentah.
 
 ---
 
@@ -169,8 +175,7 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
-  "exists": false,
+  "available": true,
   "message": "Email tersedia."
 }
 ```
@@ -217,7 +222,7 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
+  "message": "Daftar notifikasi berhasil diambil.",
   "data": [
     {
       "id": "d3b07384-d113-4a18-971c-99d821217e94",
@@ -247,7 +252,7 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
+  "message": "Jumlah notifikasi belum dibaca berhasil diambil.",
   "unread_count": 3
 }
 ```
@@ -258,7 +263,6 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
   "message": "Notifikasi berhasil ditandai sebagai sudah dibaca.",
   "data": {
     "id": "d3b07384-d113-4a18-971c-99d821217e94",
@@ -273,7 +277,6 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
   "message": "Semua notifikasi berhasil ditandai sebagai sudah dibaca."
 }
 ```
@@ -284,7 +287,6 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
   "message": "Notifikasi berhasil dihapus."
 }
 ```
@@ -481,14 +483,83 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 * **Response 201 Created**
 
 #### `POST /api/users/delete-multiple`
-* **Deskripsi:** Menghapus beberapa pengguna sekaligus (proteksi: manager tidak bisa menghapus akun sendiri).
+* **Deskripsi:** Menghapus beberapa pengguna sekaligus (proteksi: manager tidak bisa menghapus akun sendiri). Atomik: jika salah satu user masih memiliki dokumen, seluruh penghapusan dibatalkan.
 * **Akses:** Manager only
 * **Request Body:** `{ "ids": [5, 6, 7] }`
 * **Response 200 OK:**
 ```json
 {
-  "status": "success",
   "message": "3 pengguna berhasil dihapus."
+}
+```
+* **Response 422** (salah satu user masih memiliki dokumen — arsip institusi tidak boleh ikut terhapus):
+```json
+{
+  "message": "Pengguna masih memiliki 2 dokumen dan tidak dapat dihapus.",
+  "errors": { "user_id": ["Pengguna masih memiliki 2 dokumen dan tidak dapat dihapus."] }
+}
+```
+
+#### `GET /api/users/{id}`
+* **Deskripsi:** Mengambil detail satu pengguna berdasarkan ID.
+* **Akses:** Manager only
+* **Response 200 OK:**
+```json
+{
+  "message": "Detail pengguna berhasil diambil.",
+  "data": {
+    "id": 2,
+    "name": "Staf Uploader IF",
+    "email": "uploader_if@test.com",
+    "nip": "198502022010011002",
+    "role": "uploader",
+    "last_seen_at": "2026-08-21T01:05:00.000000Z",
+    "created_at": "2026-01-14T04:00:00.000000Z"
+  }
+}
+```
+
+#### `PUT /api/users/{id}`
+* **Deskripsi:** Memperbarui data akun staf (nama, email, nip, role, dan opsional password).
+* **Akses:** Manager only
+* **Request Body:**
+```json
+{
+  "name": "Staf QC Diperbarui",
+  "email": "qc_baru@test.com",
+  "nip": "199003032015011003",
+  "role": "qc",
+  "password": "PasswordBaru123!"
+}
+```
+* **Response 200 OK:**
+```json
+{
+  "message": "Pengguna berhasil diperbarui.",
+  "data": {
+    "id": 2,
+    "name": "Staf QC Diperbarui",
+    "email": "qc_baru@test.com",
+    "nip": "199003032015011003",
+    "role": "qc"
+  }
+}
+```
+
+#### `DELETE /api/users/{id}`
+* **Deskripsi:** Menghapus satu akun pengguna (dengan proteksi: manager tidak dapat menghapus akun sendiri, akan mengembalikan 422). User yang masih memiliki dokumen arsip **tidak dapat dihapus** (422) — dokumen institusi tidak boleh terhapus bersama akun uploader-nya.
+* **Akses:** Manager only
+* **Response 200 OK:**
+```json
+{
+  "message": "Pengguna berhasil dihapus."
+}
+```
+* **Response 422** (user masih memiliki dokumen):
+```json
+{
+  "message": "Pengguna masih memiliki 2 dokumen dan tidak dapat dihapus.",
+  "errors": { "user_id": ["Pengguna masih memiliki 2 dokumen dan tidak dapat dihapus."] }
 }
 ```
 
@@ -498,11 +569,11 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 
 #### `GET /api/documents`
 * **Deskripsi:** Mengambil daftar dokumen arsip dengan dukungan multi-kriteria filtering lengkap.
-* **Akses:** Authenticated (Manager/QC/SBAP melihat semua, Uploader hanya melihat dokumen miliknya).
+* **Akses:** Authenticated (Manager/QC melihat semua status, Uploader hanya melihat dokumen miliknya, **SBAP hanya melihat metadata dokumen berstatus `terverifikasi`** — filter `status` dari request diabaikan untuk SBAP).
 * **Query Params:**
   * `document_type`: `nilai` | `transkrip` | `ijazah` | `berita_acara_sidang`
   * `prodi`: Nama prodi (contoh: `Teknik Informatika`)
-  * `status`: `menunggu_verifikasi` | `terverifikasi` | `tidak_terverifikasi`
+  * `status`: `menunggu verifikasi` | `terverifikasi` | `tidak terverifikasi`
   * `tahun_ajaran`: (contoh: `2024/2025`)
   * `mata_kuliah`: (pencarian teks mata kuliah)
   * `tahun_lulus`: (contoh: `2024`)
@@ -515,11 +586,11 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 #### `GET /api/documents/pending`
 * **Deskripsi:** Antrean dokumen yang sedang menunggu verifikasi QC (diurutkan secara FIFO / terlama dulu).
 * **Akses:** QC & Manager
-* **Response 200 OK:** List dokumen dengan status `menunggu_verifikasi`.
+* **Response 200 OK:** List dokumen dengan status `menunggu verifikasi`.
 
 #### `GET /api/documents/statistics`
 * **Deskripsi:** Statistik dokumen total, terverifikasi, pending, ditolak, dan breakdown per tipe dokumen.
-* **Akses:** Authenticated
+* **Akses:** Manager, QC & Uploader (SBAP mendapat **403** sampai ada keputusan bisnis berbeda).
 * **Response 200 OK:**
 ```json
 {
@@ -551,21 +622,65 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
   * *Metadata Ijazah/Transkrip/BAS:* `tahun_lulus`, `npm` (required jika tipe `ijazah`/`transkrip`/`berita_acara_sidang`)
 * **Response 201 Created**
 
+#### `GET /api/documents/{id}`
+* **Deskripsi:** Mengambil detail satu dokumen beserta relasi uploader dan verifier.
+* **Akses:** Authenticated (policy `view`: Uploader hanya dokumen miliknya; Manager/QC semua status; **SBAP hanya dokumen berstatus `terverifikasi`** — 403 untuk status lain).
+* **Response 200 OK:**
+```json
+{
+  "message": "Detail dokumen berhasil diambil.",
+  "data": { "id": 12, "file_name": "Nilai_Struktur_Data.pdf", "status": "Menunggu Verifikasi" }
+}
+```
+
+#### `PUT /api/documents/{id}`
+* **Deskripsi:** Memperbarui metadata dokumen. Hanya untuk dokumen berstatus `tidak terverifikasi`; file dan `document_type` tidak dapat diubah. Setelah update, status otomatis direset ke `menunggu verifikasi`.
+* **Akses:** Uploader (dokumen miliknya) & Manager
+* **Response 200 OK:**
+```json
+{
+  "message": "Dokumen berhasil diperbarui. Status direset ke menunggu verifikasi.",
+  "data": { "id": 12, "status": "Menunggu Verifikasi" }
+}
+```
+* **Catatan:** Dokumen yang sudah `terverifikasi` tidak dapat diperbarui (422).
+
+#### `DELETE /api/documents/{id}`
+* **Deskripsi:** Menghapus dokumen secara *soft-delete* (pindah ke tempat sampah). Hanya dokumen berstatus `tidak terverifikasi` yang dapat dihapus.
+* **Akses:** Uploader (dokumen miliknya) & Manager
+* **Response 200 OK:**
+```json
+{
+  "message": "Dokumen berhasil dihapus."
+}
+```
+
+#### `POST /api/documents/delete-multiple`
+* **Deskripsi:** Menghapus beberapa dokumen sekaligus secara *soft-delete*. Hanya dokumen berstatus `tidak terverifikasi` yang dapat dihapus.
+* **Akses:** Uploader (dokumen miliknya) & Manager
+* **Request Body:** `{ "ids": [5, 6, 7] }`
+* **Response 200 OK:**
+```json
+{
+  "message": "3 dokumen berhasil dihapus.",
+  "deleted_count": 3
+}
+```
+
 #### `PATCH /api/documents/{id}/verify` (Verifikasi Dokumen - UC-08)
 * **Deskripsi:** Melakukan verifikasi dokumen (menyetujui atau menolak dengan catatan perbaikan). Otomatis memicu pembuatan notifikasi untuk uploader terkait.
 * **Akses:** QC & Manager
 * **Request Body:**
 ```json
 {
-  "status": "tidak_terverifikasi",
+  "status": "tidak terverifikasi",
   "verification_note": "Stempel dekanat pada lembar kedua buram, mohon scan ulang berkas asli."
 }
 ```
-* **Response 200 OK:**
+* **Response 200 OK:** (field `status` pada objek data berupa **label**, contoh `Tidak Terverifikasi`)
 ```json
 {
-  "status": "success",
-  "message": "Status verifikasi dokumen berhasil diperbarui.",
+  "message": "Dokumen ditolak.",
   "data": {
     "id": 12,
     "status": "Tidak Terverifikasi",
@@ -575,10 +690,64 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
   }
 }
 ```
+> `message` bernilai `"Dokumen berhasil diverifikasi."` bila `status` permintaan adalah `terverifikasi`, dan `"Dokumen ditolak."` bila `tidak terverifikasi`.
+
+#### `POST /api/documents/{id}/revoke-verification` (Batalkan Verifikasi)
+* **Deskripsi:** Membatalkan verifikasi dokumen yang sudah `terverifikasi` — untuk koreksi human error (QC salah verifikasi, uploader salah unggah, atau dokumen perlu diperbaiki setelah disetujui). Status dikembalikan ke `menunggu verifikasi` dan seluruh metadata verifikasi (`verified_by`, `verified_at`, `verification_note`) dibersihkan, sehingga uploader dapat merevisi dokumen dan QC/Manager dapat memverifikasi ulang. Dokumen tetap aktif dan file fisik tidak diubah.
+* **Akses:** Manager only (role lain → `403 Forbidden`)
+* **Request Body (opsional):**
+```json
+{
+  "reason": "Dokumen yang diverifikasi tidak sesuai."
+}
+```
+  * `reason`: *optional*, string, maksimal 500 karakter. Dicatat di audit log bila diisi.
+* **State transition:**
+```text
+terverifikasi
+      ↓  (revoke, Manager)
+menunggu verifikasi
+```
+  * `verified_by = null`, `verified_at = null`, `verification_note = null`
+* **Audit:** Action `revoke_verification` dicatat di audit log (user manager, `document_id`, `old_status: terverifikasi`, `new_status: menunggu verifikasi`, `reason` bila ada, waktu aksi).
+* **Response 200 OK:**
+```json
+{
+  "message": "Verifikasi dokumen berhasil dibatalkan. Status dikembalikan ke menunggu verifikasi.",
+  "data": {
+    "id": 12,
+    "status": "Menunggu Verifikasi",
+    "verified_by_name": null,
+    "verified_at": null,
+    "verification_note": null
+  }
+}
+```
+* **Response 403 Forbidden** (bukan Manager):
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+* **Response 404 Not Found:** Dokumen tidak ditemukan.
+* **Response 422 Unprocessable Entity** (dokumen tidak berstatus `terverifikasi` — mis. masih `menunggu verifikasi` atau sudah `tidak terverifikasi`):
+```json
+{
+  "message": "Hanya dokumen dengan status terverifikasi yang dapat dibatalkan verifikasinya.",
+  "errors": {
+    "document": [
+      "Hanya dokumen dengan status terverifikasi yang dapat dibatalkan verifikasinya."
+    ]
+  }
+}
+```
+* **Catatan:** Setelah revoke, workflow normal berlaku kembali — dokumen kembali masuk antrean `/api/documents/pending` dan dapat diverifikasi ulang via `PATCH /api/documents/{id}/verify`.
 
 #### `GET /api/documents/{id}/view`
 * **Deskripsi:** Menampilkan/streaming file PDF secara inline di browser (untuk preview/verifikasi modal).
-* **Akses:** Authenticated
+* **Akses:** Sama dengan aturan download:
+  - Dokumen `terverifikasi`: semua role.
+  - Dokumen belum terverifikasi: Manager (semua), Uploader (hanya miliknya sendiri), QC (hanya `menunggu verifikasi`), SBAP (tidak bisa).
 * **Response:** Stream `application/pdf` dengan header `Content-Disposition: inline`.
 
 #### `GET /api/documents/{id}/download`
@@ -636,10 +805,17 @@ X-XSRF-TOKEN: <nilai-dari-cookie-XSRF-TOKEN>
 #### `DELETE /api/documents/{id}/force-delete`
 * **Deskripsi:** Menghapus data dokumen dari database dan menghapus file fisik PDF dari storage secara permanen.
 * **Akses:** Manager only
+* **Target:** Hanya dokumen yang sudah di-*soft-delete* (berada di tempat sampah, lihat `GET /api/documents/trashed`). Dokumen **aktif** tidak dapat di-force-delete — termasuk dokumen `terverifikasi`; untuk koreksi dokumen terverifikasi gunakan `POST /api/documents/{id}/revoke-verification`.
 * **Response 200 OK:**
 ```json
 {
   "message": "Dokumen berhasil dihapus permanen."
+}
+```
+* **Response 404 Not Found:** Dokumen tidak ditemukan **atau** dokumen masih aktif (belum di-soft-delete):
+```json
+{
+  "message": "Not Found."
 }
 ```
 

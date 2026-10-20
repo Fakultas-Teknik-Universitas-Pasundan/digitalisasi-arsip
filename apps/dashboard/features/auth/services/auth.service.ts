@@ -32,7 +32,10 @@ export const authService = {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response
         ?.status;
-      if (status === 401 || status === 419) {
+      // No HTTP status means the request never reached the API (network/CORS/
+      // timeout). Treat it as "not authenticated" so the auth guards resolve and
+      // show the login page instead of spinning on the auth check forever.
+      if (!status || status === 401 || status === 419) {
         return null;
       }
       throw err;

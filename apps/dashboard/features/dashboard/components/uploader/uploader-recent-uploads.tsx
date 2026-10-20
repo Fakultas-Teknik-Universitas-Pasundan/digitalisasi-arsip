@@ -60,11 +60,14 @@ export function UploaderRecentUploads({
         ) : documents.length > 0 ? (
           <div className="divide-y divide-border/60">
             {documents.map((doc) => {
-              const statusStr = String(doc.status);
+              const statusStr = String(doc.status).toLowerCase();
               const isVerified =
-                statusStr === "verified" || statusStr === "terverifikasi";
+                statusStr.includes("terverifikasi") &&
+                !statusStr.includes("tidak");
               const isRejected =
-                statusStr === "rejected" || statusStr === "tidak_terverifikasi";
+                statusStr.includes("tidak") ||
+                statusStr.includes("rejected") ||
+                statusStr.includes("ditolak");
 
               return (
                 <div

@@ -799,13 +799,14 @@ export function SearchCommandDialog({
                 ) : searchResultsQuery.data?.data?.length ? (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                     {searchResultsQuery.data.data.map((doc) => {
-                      const statusStr = String(doc.status);
+                      const statusStr = String(doc.status).toLowerCase();
                       const isVerified =
-                        statusStr === "verified" ||
-                        statusStr === "terverifikasi";
+                        statusStr.includes("terverifikasi") &&
+                        !statusStr.includes("tidak");
                       const isRejected =
-                        statusStr === "rejected" ||
-                        statusStr === "tidak_terverifikasi";
+                        statusStr.includes("tidak") ||
+                        statusStr.includes("rejected") ||
+                        statusStr.includes("ditolak");
 
                       return (
                         <div

@@ -38,8 +38,8 @@ export const VerifyDocumentDialog: React.FC<VerifyDocumentDialogProps> = ({
     try {
       setLoading(true);
       await http.patch(`/api/documents/${documentId}/verify`, {
-        status: "verified",
-        notes,
+        status: "terverifikasi",
+        verification_note: notes || undefined,
       });
       toast.success("Dokumen berhasil diverifikasi!");
       queryClient.invalidateQueries({ queryKey: ["documents"] });

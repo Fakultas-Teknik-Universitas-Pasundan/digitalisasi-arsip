@@ -2,7 +2,7 @@
     "openapi": "3.0.0",
     "info": {
         "title": "API Digitalisasi Arsip",
-        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan session-based authentication / Bearer Token.\n\n**Langkah autentikasi (Session):**\n1. GET `/api/csrf-cookie` untuk mendapatkan CSRF token\n2. POST `/api/auth/login` dengan credentials\n3. Sertakan cookie dan X-XSRF-TOKEN header pada setiap request\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
+        "description": "REST API untuk sistem digitalisasi arsip akademik.\n\n## Autentikasi\nAPI ini menggunakan Laravel Sanctum dengan **stateful session (cookie-based) authentication**.\nTidak ada penerbitan Bearer Token; login mengembalikan objek user, bukan token.\n\n**Langkah autentikasi (Session):**\n1. GET `/sanctum/csrf-cookie` untuk mendapatkan cookie `XSRF-TOKEN`\n2. POST `/api/auth/login` dengan credentials (cookie sesi tersimpan otomatis)\n3. Sertakan cookie sesi dan header `X-XSRF-TOKEN` pada setiap request tulis (POST/PUT/PATCH/DELETE)\n\n## Roles\n- **Manager**: Full access ke semua fitur\n- **Uploader**: Upload, update & delete dokumen sendiri\n- **QC**: Verifikasi dokumen\n- **SBAP**: Download dokumen terverifikasi",
         "contact": {
             "name": "API Support"
         },
@@ -322,7 +322,7 @@
                 ]
             }
         },
-        "/api/csrf-cookie": {
+        "/sanctum/csrf-cookie": {
             "get": {
                 "tags": [
                     "Authentication"
@@ -564,7 +564,7 @@
                     "Documents"
                 ],
                 "summary": "List Documents",
-                "description": "Mengambil daftar dokumen",
+                "description": "Mengambil daftar dokumen.\\n\\n**Catatan role:**\\n- **SBAP**: hanya melihat metadata dokumen berstatus `terverifikasi`; filter `status` dari request diabaikan (didominasi oleh aturan verified-only).",
                 "operationId": "listDocuments",
                 "parameters": [
                     {
@@ -584,13 +584,13 @@
                     {
                         "name": "status",
                         "in": "query",
-                        "description": "Filter berdasarkan status",
+                        "description": "Filter berdasarkan status. Gunakan nilai enum persis (huruf kecil, ber/spasi): `menunggu verifikasi` | `terverifikasi` | `tidak terverifikasi`. Catatan: field `status` pada respons mengembalikan label Title Case (mis. `Menunggu Verifikasi`), sedangkan filter menerima nilai enum.",
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "menunggu_verifikasi",
+                                "menunggu verifikasi",
                                 "terverifikasi",
-                                "tidak_terverifikasi"
+                                "tidak terverifikasi"
                             ]
                         }
                     },
@@ -821,7 +821,7 @@
                     "Documents"
                 ],
                 "summary": "Get Document Detail",
-                "description": "Mengambil detail dokumen berdasarkan ID",
+                "description": "Mengambil detail dokumen berdasarkan ID.\\n\\n**Catatan role:** SBAP hanya dapat melihat detail dokumen berstatus `terverifikasi` (403 untuk status lain).",
                 "operationId": "getDocument",
                 "parameters": [
                     {
@@ -906,7 +906,7 @@
                     "Documents"
                 ],
                 "summary": "Update Document (UC-06)",
-                "description": "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
+                "description": "Update metadata dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu verifikasi`.\nFile dan document_type tidak dapat diubah.",
                 "operationId": "updateDocument",
                 "parameters": [
                     {
@@ -1011,7 +1011,7 @@
                     "Documents"
                 ],
                 "summary": "Delete Document (UC-07)",
-                "description": "Menghapus dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
+                "description": "Menghapus dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
                 "operationId": "deleteDocument",
                 "parameters": [
                     {
@@ -1098,7 +1098,7 @@
                     "Documents"
                 ],
                 "summary": "Delete Multiple Documents",
-                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
+                "description": "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
                 "operationId": "deleteMultipleDocuments",
                 "requestBody": {
                     "required": true,
@@ -1187,7 +1187,7 @@
                     "Statistics"
                 ],
                 "summary": "Get Document Statistics",
-                "description": "Mengambil statistik dokumen: total, verified, pending, rejected (Manager only)",
+                "description": "Mengambil statistik dokumen (Manager, QC & Uploader).\\n\\nSBAP mendapat **403** sampai ada keputusan bisnis berbeda (Fase-1).",
                 "operationId": "getDocumentStatistics",
                 "responses": {
                     "200": {
@@ -1392,7 +1392,7 @@
                     "Documents"
                 ],
                 "summary": "Force Delete Document",
-                "description": "Menghapus dokumen dan file fisiknya secara permanen (Manager only)",
+                "description": "Menghapus dokumen dan file fisiknya secara permanen (Manager only).\\n\\nHanya berlaku untuk dokumen yang sudah di-soft-delete (berada di tempat sampah). Dokumen aktif tidak dapat di-force-delete dan akan mengembalikan 404.",
                 "operationId": "forceDeleteDocument",
                 "parameters": [
                     {
@@ -1467,6 +1467,121 @@
                                         }
                                     },
                                     "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/documents/{id}/revoke-verification": {
+            "post": {
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Revoke Document Verification (Manager only)",
+                "description": "Membatalkan verifikasi dokumen yang sudah `terverifikasi` (Manager only).\n\nStatus dokumen dikembalikan ke `menunggu verifikasi` dan seluruh metadata verifikasi (verifier, waktu verifikasi, catatan) dibersihkan, sehingga uploader dapat merevisi dokumen dan QC/Manager dapat memverifikasi ulang.",
+                "operationId": "revokeDocumentVerification",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Document ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "description": "Alasan pembatalan verifikasi (opsional)",
+                                        "type": "string",
+                                        "example": "Dokumen salah unggah, perlu diperbaiki oleh uploader.",
+                                        "maxLength": 500
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Verifikasi dokumen berhasil dibatalkan",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DocumentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - hanya Manager",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "This action is unauthorized."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Not Found."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Dokumen tidak berstatus terverifikasi",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
                                 }
                             }
                         }
@@ -1653,7 +1768,7 @@
                     "Documents"
                 ],
                 "summary": "View Document Inline (PDF Viewer)",
-                "description": "Menampilkan file dokumen secara inline (untuk PDF viewer di browser).\n\nSemua user yang terautentikasi dapat melihat dokumen.",
+                "description": "Menampilkan file dokumen secara inline (untuk PDF viewer di browser).\n\n**Aturan akses view:** sama dengan aturan download.\n- Dokumen **terverifikasi**: semua role bisa view\n- Dokumen **belum terverifikasi**:\n  - Manager: bisa view semua dokumen\n  - Uploader: hanya dokumen miliknya sendiri\n  - QC: hanya dokumen pending (untuk verifikasi)\n  - SBAP: tidak bisa view",
                 "operationId": "viewDocument",
                 "parameters": [
                     {
@@ -3089,7 +3204,7 @@
                     "Users"
                 ],
                 "summary": "Delete User",
-                "description": "Menghapus user (tidak bisa menghapus akun sendiri)",
+                "description": "Menghapus user (tidak bisa menghapus akun sendiri). User yang masih memiliki dokumen arsip tidak dapat dihapus (422).",
                 "operationId": "deleteUser",
                 "parameters": [
                     {
@@ -3317,7 +3432,7 @@
                     "Users"
                 ],
                 "summary": "Delete Multiple Users",
-                "description": "Menghapus beberapa user sekaligus (Manager only). Tidak bisa menghapus akun sendiri.",
+                "description": "Menghapus beberapa user sekaligus (Manager only). Tidak bisa menghapus akun sendiri. Atomik: jika salah satu user masih memiliki dokumen, seluruh penghapusan dibatalkan (422).",
                 "operationId": "deleteMultipleUsers",
                 "requestBody": {
                     "required": true,
@@ -4102,12 +4217,12 @@
                 ],
                 "properties": {
                     "status": {
-                        "description": "Status verifikasi",
+                        "description": "Status verifikasi. Gunakan nilai enum persis (huruf kecil, spasi). Tidak menerima nilai `menunggu verifikasi`.",
                         "type": "string",
                         "example": "terverifikasi",
                         "enum": [
                             "terverifikasi",
-                            "tidak_terverifikasi"
+                            "tidak terverifikasi"
                         ]
                     },
                     "verification_note": {

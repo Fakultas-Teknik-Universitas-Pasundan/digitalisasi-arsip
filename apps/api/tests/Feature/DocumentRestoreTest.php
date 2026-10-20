@@ -119,11 +119,26 @@ class DocumentRestoreTest extends TestCase
     public function test_non_manager_cannot_force_delete_document(): void
     {
         $document = Document::factory()->create();
+        $document->delete(); // force-delete only works on soft-deleted documents
 
         $this->actingAs($this->qc);
 
         $response = $this->deleteJson("/api/documents/{$document->id}/force-delete");
 
         $response->assertStatus(403);
+    }
+
+    public function test_force_delete_returns_404_for_active_document(): void
+    {
+        $this->actingAs($this->manager);
+
+        // Active (not soft-deleted) document must not be force deletable (F01 fix)
+        $document = Document::factory()->create();
+
+        $response = $this->deleteJson("/api/documents/{$document->id}/force-delete");
+
+        $response->assertStatus(404);
+
+        $this->assertDatabaseHas('documents', ['id' => $document->id]);
     }
 }

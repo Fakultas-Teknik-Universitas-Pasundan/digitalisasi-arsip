@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\AuditLog;
+use App\Models\Document;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -268,3 +268,57 @@ test('user tidak terautentikasi tidak bisa akses manajemen user', function () {
     $response->assertStatus(401);
 });
 
+test('manager tidak dapat menghapus user yang masih memiliki dokumen', function () {
+    $this->actingAs($this->manager);
+
+    $document = Document::factory()->pending()->create([
+        'uploaded_by' => $this->uploader->id,
+    ]);
+
+    $response = $this->deleteJson("/api/users/{$this->uploader->id}");
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['user_id']);
+
+    // User tetap ada
+    $this->assertDatabaseHas('users', ['id' => $this->uploader->id]);
+
+    // Dokumen tetap ada, tidak masuk soft-delete, dan uploaded_by tetap menunjuk user
+    $this->assertDatabaseHas('documents', ['id' => $document->id, 'deleted_at' => null]);
+    $this->assertDatabaseHas('documents', ['id' => $document->id, 'uploaded_by' => $this->uploader->id]);
+});
+
+test('bulk delete user ditolak seluruhnya jika salah satu user masih memiliki dokumen', function () {
+    $this->actingAs($this->manager);
+
+    $cleanUploader = User::factory()->create(['role' => 'uploader']);
+    $document = Document::factory()->verified()->create([
+        'uploaded_by' => $this->uploader->id,
+    ]);
+
+    $response = $this->postJson('/api/users/delete-multiple', [
+        'ids' => [$cleanUploader->id, $this->uploader->id],
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['user_id']);
+
+    // Tidak ada penghapusan parsial: user tanpa dokumen juga tidak terhapus
+    $this->assertDatabaseHas('users', ['id' => $cleanUploader->id]);
+    $this->assertDatabaseHas('users', ['id' => $this->uploader->id]);
+    $this->assertDatabaseHas('documents', ['id' => $document->id, 'deleted_at' => null]);
+});
+
+test('dokumen user terverifikasi juga menghalangi penghapusan user', function () {
+    $this->actingAs($this->manager);
+
+    Document::factory()->verified()->create([
+        'uploaded_by' => $this->uploader->id,
+    ]);
+
+    $response = $this->deleteJson("/api/users/{$this->uploader->id}");
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['user_id']);
+    $this->assertDatabaseHas('users', ['id' => $this->uploader->id]);
+});

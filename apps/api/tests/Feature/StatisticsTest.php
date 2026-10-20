@@ -78,4 +78,75 @@ class StatisticsTest extends TestCase
             ->assertJsonPath('data.pending_documents', 2)
             ->assertJsonPath('data.rejected_documents', 1);
     }
+
+    /**
+     * Regression (Fase-1): QC must keep access to document statistics.
+     */
+    public function test_qc_can_view_document_statistics()
+    {
+        $qc = User::factory()->create(['role' => UserRole::QC]);
+
+        Document::factory()->count(3)->create(['status' => DocumentStatus::VERIFIED]);
+        Document::factory()->count(2)->create(['status' => DocumentStatus::PENDING]);
+        Document::factory()->count(1)->create(['status' => DocumentStatus::REJECTED]);
+
+        $response = $this->actingAs($qc)
+            ->getJson('/api/documents/statistics');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'message',
+                'data' => [
+                    'total_documents',
+                    'verified_documents',
+                    'pending_documents',
+                    'rejected_documents'
+                ]
+            ])
+            ->assertJsonPath('data.total_documents', 6);
+    }
+
+    /**
+     * Regression (Fase-1): Uploader must keep pre-Fase-1 access to
+     * document statistics, with a fully valid response body.
+     */
+    public function test_uploader_can_view_document_statistics()
+    {
+        $uploader = User::factory()->create(['role' => UserRole::UPLOADER]);
+
+        Document::factory()->count(3)->create(['status' => DocumentStatus::VERIFIED]);
+        Document::factory()->count(2)->create(['status' => DocumentStatus::PENDING]);
+        Document::factory()->count(1)->create(['status' => DocumentStatus::REJECTED]);
+
+        $response = $this->actingAs($uploader)
+            ->getJson('/api/documents/statistics');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'message',
+                'data' => [
+                    'total_documents',
+                    'verified_documents',
+                    'pending_documents',
+                    'rejected_documents'
+                ]
+            ])
+            ->assertJsonPath('data.total_documents', 6)
+            ->assertJsonPath('data.verified_documents', 3)
+            ->assertJsonPath('data.pending_documents', 2)
+            ->assertJsonPath('data.rejected_documents', 1);
+    }
+
+    /**
+     * Regression (Fase-1): SBAP must stay blocked from document statistics.
+     */
+    public function test_sbap_cannot_view_document_statistics()
+    {
+        $sbap = User::factory()->create(['role' => UserRole::SBAP]);
+
+        $response = $this->actingAs($sbap)
+            ->getJson('/api/documents/statistics');
+
+        $response->assertStatus(403);
+    }
 }

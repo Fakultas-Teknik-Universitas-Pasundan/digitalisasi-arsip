@@ -9,7 +9,7 @@ export function useSBAPDashboard() {
 
   const verifiedDocsQuery = useQuery(
     dashboardQueries.documents({
-      status: "verified",
+      status: "terverifikasi",
       per_page: 15,
       search: searchTerm,
     }),

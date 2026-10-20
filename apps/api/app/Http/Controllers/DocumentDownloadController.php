@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\BulkActionRequest;
-use App\Models\Document;
 use App\Enums\AuditAction;
 use App\Enums\ModelType;
+use App\Http\Requests\BulkActionRequest;
 use App\Models\AuditLog;
+use App\Models\Document;
 use Illuminate\Support\Facades\Storage;
-use ZipArchive;
 use OpenApi\Attributes as OA;
+use ZipArchive;
 
 class DocumentDownloadController extends Controller
 {
@@ -37,7 +37,7 @@ class DocumentDownloadController extends Controller
     {
         $this->authorize('download', $document);
 
-        if (!Storage::exists($document->file_path)) {
+        if (! Storage::exists($document->file_path)) {
             abort(404, 'File tidak ditemukan.');
         }
 
@@ -92,14 +92,14 @@ class DocumentDownloadController extends Controller
             $this->authorize('download', $document);
         }
 
-        $zipFileName = 'documents_' . now()->format('YmdHis') . '.zip';
-        $zipPath = storage_path('app/temp/' . $zipFileName);
+        $zipFileName = 'documents_'.now()->format('YmdHis').'.zip';
+        $zipPath = storage_path('app/temp/'.$zipFileName);
 
-        if (!file_exists(storage_path('app/temp'))) {
+        if (! file_exists(storage_path('app/temp'))) {
             mkdir(storage_path('app/temp'), 0755, true);
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             abort(500, 'Gagal membuat file ZIP');
         }
@@ -113,7 +113,7 @@ class DocumentDownloadController extends Controller
 
                 while ($zip->locateName($fileName) !== false) {
                     $pathInfo = pathinfo($document->file_name);
-                    $fileName = $pathInfo['filename'] . '_' . $counter . '.' . $pathInfo['extension'];
+                    $fileName = $pathInfo['filename'].'_'.$counter.'.'.$pathInfo['extension'];
                     $counter++;
                 }
 
@@ -125,7 +125,7 @@ class DocumentDownloadController extends Controller
 
         AuditLog::log(
             action: AuditAction::DOWNLOAD_DOCUMENT->value,
-            description: "Mengunduh " . count($documents) . " dokumen sebagai ZIP.",
+            description: 'Mengunduh '.count($documents).' dokumen sebagai ZIP.',
             metadata: [
                 'document_ids' => $documentIds,
                 'total_files' => count($documents),
@@ -142,7 +142,7 @@ class DocumentDownloadController extends Controller
         path: '/api/documents/{id}/view',
         operationId: 'viewDocument',
         summary: 'View Document Inline (PDF Viewer)',
-        description: "Menampilkan file dokumen secara inline (untuk PDF viewer di browser).\n\nSemua user yang terautentikasi dapat melihat dokumen.",
+        description: "Menampilkan file dokumen secara inline (untuk PDF viewer di browser).\n\n**Aturan akses view:** sama dengan aturan download.\n- Dokumen **terverifikasi**: semua role bisa view\n- Dokumen **belum terverifikasi**:\n  - Manager: bisa view semua dokumen\n  - Uploader: hanya dokumen miliknya sendiri\n  - QC: hanya dokumen pending (untuk verifikasi)\n  - SBAP: tidak bisa view",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -157,9 +157,11 @@ class DocumentDownloadController extends Controller
     )]
     public function view(Document $document)
     {
-        $this->authorize('view', $document);
+        // Inline view streams the same file as download, so it must follow
+        // the same authorization rules as download.
+        $this->authorize('download', $document);
 
-        if (!Storage::exists($document->file_path)) {
+        if (! Storage::exists($document->file_path)) {
             abort(404, 'File tidak ditemukan.');
         }
 
@@ -181,7 +183,7 @@ class DocumentDownloadController extends Controller
             $document->file_name,
             [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="' . $document->file_name . '"',
+                'Content-Disposition' => 'inline; filename="'.$document->file_name.'"',
             ]
         );
     }

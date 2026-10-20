@@ -24,7 +24,7 @@ export function SBAPRecentDownloadsCard({
 }: SBAPRecentDownloadsCardProps) {
   // Directly fetch verified documents from API
   const docsQuery = useQuery(
-    dashboardQueries.documents({ status: "verified", per_page: 5 }),
+    dashboardQueries.documents({ status: "terverifikasi", per_page: 5 }),
   );
   const isLoading = docsQuery.isLoading;
 

@@ -210,7 +210,7 @@ See `config/login-security.php` for all options.
 - `document_types` - Master Data Jenis Dokumen
 - `audit_logs` - Comprehensive activity logging
 - `login_attempts` - Failed login tracking
-- `personal_access_tokens` - Sanctum Bearer tokens
+- `personal_access_tokens` - Sanctum token table (tersedia; tidak dipakai alur auth session/cookie saat ini)
 
 ### Document Types (Enum & Master Data)
 
@@ -347,7 +347,7 @@ LOGIN_CLEANUP_AFTER_MINUTES=10
 For questions or issues:
 
 - Review documentation in `docs/` directory
-- Check `swagger.yaml` for API specification
+- Check the Swagger UI at `/api/documentation` (spec: `storage/api-docs/api-docs.json`) for the API specification
 - Review audit logs for debugging
 
 ---

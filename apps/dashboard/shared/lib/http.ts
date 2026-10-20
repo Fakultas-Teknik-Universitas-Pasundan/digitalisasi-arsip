@@ -1,7 +1,16 @@
 import axios from "axios";
 
+// In local development the dashboard can be opened via `localhost` OR
+// `127.0.0.1`. Cookies (such as the XSRF token read by the request interceptor)
+// are host-scoped, so the API must be called on the SAME hostname as the page.
+// `NEXT_PUBLIC_API_URL` still takes precedence when provided.
+const defaultBaseUrl =
+  typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : "http://localhost:8000";
+
 export const http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000",
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? defaultBaseUrl,
   withCredentials: true,
   headers: {
     Accept: "application/json",

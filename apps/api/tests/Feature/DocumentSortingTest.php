@@ -13,6 +13,26 @@ class DocumentSortingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_document_resource_returns_status_as_title_case_label()
+    {
+        $user = User::factory()->create(['role' => 'manager']);
+        $this->actingAs($user);
+
+        Document::factory()->pending()->create();
+        Document::factory()->verified()->create();
+        Document::factory()->rejected()->create();
+
+        $response = $this->getJson('/api/documents');
+
+        $response->assertStatus(200);
+
+        // The API sends the display label (Title Case), not the raw enum value.
+        $this->assertEqualsCanonicalizing(
+            ['Menunggu Verifikasi', 'Terverifikasi', 'Tidak Terverifikasi'],
+            collect($response->json('data'))->pluck('status')->all()
+        );
+    }
+
     public function test_documents_can_be_sorted_by_tahun_lulus_asc()
     {
         $user = User::factory()->create(['role' => 'manager']);

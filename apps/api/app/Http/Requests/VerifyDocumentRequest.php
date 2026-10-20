@@ -38,7 +38,7 @@ class VerifyDocumentRequest extends FormRequest
     {
         return [
             'status.required' => 'Status verifikasi wajib diisi.',
-            'status.in' => 'Status harus terverifikasi atau tidak_terverifikasi (tidak boleh pending).',
+            'status.in' => 'Status harus terverifikasi atau tidak terverifikasi (tidak boleh pending).',
             'verification_note.max' => 'Catatan verifikasi maksimal 500 karakter.',
         ];
     }

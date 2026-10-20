@@ -30,12 +30,12 @@ class DocumentController extends Controller
         path: '/api/documents',
         operationId: 'listDocuments',
         summary: 'List Documents',
-        description: 'Mengambil daftar dokumen',
+        description: 'Mengambil daftar dokumen.\n\n**Catatan role:**\n- **SBAP**: hanya melihat metadata dokumen berstatus `terverifikasi`; filter `status` dari request diabaikan (didominasi oleh aturan verified-only).',
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
             new OA\Parameter(name: 'document_type', in: 'query', description: 'Filter berdasarkan tipe dokumen', schema: new OA\Schema(type: 'string', enum: ['nilai', 'transkrip', 'ijazah', 'berita_acara_sidang'])),
-            new OA\Parameter(name: 'status', in: 'query', description: 'Filter berdasarkan status', schema: new OA\Schema(type: 'string', enum: ['menunggu_verifikasi', 'terverifikasi', 'tidak_terverifikasi'])),
+            new OA\Parameter(name: 'status', in: 'query', description: 'Filter berdasarkan status. Gunakan nilai enum persis (huruf kecil, ber/spasi): `menunggu verifikasi` | `terverifikasi` | `tidak terverifikasi`. Catatan: field `status` pada respons mengembalikan label Title Case (mis. `Menunggu Verifikasi`), sedangkan filter menerima nilai enum.', schema: new OA\Schema(type: 'string', enum: ['menunggu verifikasi', 'terverifikasi', 'tidak terverifikasi'])),
             new OA\Parameter(name: 'prodi', in: 'query', description: 'Filter berdasarkan program studi', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'search', in: 'query', description: 'Cari berdasarkan nama file', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'sort_by', in: 'query', description: 'Kolom untuk sorting (default: created_at)', schema: new OA\Schema(type: 'string', default: 'created_at', enum: ['created_at', 'updated_at', 'tahun_lulus', 'status', 'document_type', 'prodi', 'file_name'])),
@@ -56,10 +56,12 @@ class DocumentController extends Controller
         $perPage = min((int) $request->input('per_page', 15), 100);
 
         // Uploader only sees their own documents (API Contract requirement)
+        // SBAP only sees metadata of verified documents (Fase-1 decision)
         $user = auth()->user();
         $uploaderId = $user->hasRole('uploader') ? $user->id : null;
+        $sbapForcedStatus = $user->hasRole('sbap') ? DocumentStatus::VERIFIED->value : null;
 
-        $documents = $this->documentService->listDocuments($request->all(), $perPage, $uploaderId);
+        $documents = $this->documentService->listDocuments($request->all(), $perPage, $uploaderId, $sbapForcedStatus);
 
         return response()->json([
             'message' => 'Daftar dokumen berhasil diambil.',
@@ -141,7 +143,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}',
         operationId: 'getDocument',
         summary: 'Get Document Detail',
-        description: 'Mengambil detail dokumen berdasarkan ID',
+        description: 'Mengambil detail dokumen berdasarkan ID.\n\n**Catatan role:** SBAP hanya dapat melihat detail dokumen berstatus `terverifikasi` (403 untuk status lain).',
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -173,7 +175,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}',
         operationId: 'updateDocument',
         summary: 'Update Document (UC-06)',
-        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu_verifikasi`.\nFile dan document_type tidak dapat diubah.",
+        description: "Update metadata dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nSetelah update, status akan direset ke `menunggu verifikasi`.\nFile dan document_type tidak dapat diubah.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -220,7 +222,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}',
         operationId: 'deleteDocument',
         summary: 'Delete Document (UC-07)',
-        description: "Menghapus dokumen (hanya untuk dokumen dengan status `tidak_terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
+        description: "Menghapus dokumen (hanya untuk dokumen dengan status `tidak terverifikasi`).\n\nManager dapat menghapus semua dokumen rejected.\nUploader hanya dapat menghapus dokumen miliknya sendiri.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -251,7 +253,7 @@ class DocumentController extends Controller
         path: '/api/documents/delete-multiple',
         operationId: 'deleteMultipleDocuments',
         summary: 'Delete Multiple Documents',
-        description: "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak_terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
+        description: "Menghapus beberapa dokumen sekaligus.\n\nHanya dokumen dengan status `tidak terverifikasi` yang dapat dihapus.\nManager dapat menghapus semua dokumen rejected. Uploader hanya dokumen miliknya.",
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/DeleteMultipleRequest')),
@@ -301,7 +303,7 @@ class DocumentController extends Controller
         path: '/api/documents/statistics',
         operationId: 'getDocumentStatistics',
         summary: 'Get Document Statistics',
-        description: 'Mengambil statistik dokumen: total, verified, pending, rejected (Manager only)',
+        description: 'Mengambil statistik dokumen (Manager, QC & Uploader).\n\nSBAP mendapat **403** sampai ada keputusan bisnis berbeda (Fase-1).',
         security: [['cookieAuth' => []]],
         tags: ['Statistics'],
         responses: [
@@ -312,7 +314,7 @@ class DocumentController extends Controller
     )]
     public function statistics(): JsonResponse
     {
-        $this->authorize('viewAny', Document::class);
+        $this->authorize('viewStatistics', Document::class);
 
         $stats = $this->documentService->getStatistics();
 
@@ -397,7 +399,7 @@ class DocumentController extends Controller
         path: '/api/documents/{id}/force-delete',
         operationId: 'forceDeleteDocument',
         summary: 'Force Delete Document',
-        description: 'Menghapus dokumen dan file fisiknya secara permanen (Manager only)',
+        description: 'Menghapus dokumen dan file fisiknya secara permanen (Manager only).\n\nHanya berlaku untuk dokumen yang sudah di-soft-delete (berada di tempat sampah). Dokumen aktif tidak dapat di-force-delete dan akan mengembalikan 404.',
         security: [['cookieAuth' => []]],
         tags: ['Documents'],
         parameters: [
@@ -412,7 +414,7 @@ class DocumentController extends Controller
     )]
     public function forceDestroy(int $id): JsonResponse
     {
-        $document = Document::withTrashed()->findOrFail($id);
+        $document = Document::onlyTrashed()->findOrFail($id);
         $this->authorize('forceDelete', $document);
 
         $this->documentService->forceDeleteDocument($document);
@@ -420,6 +422,64 @@ class DocumentController extends Controller
         return response()->json([
             'message' => 'Dokumen berhasil dihapus permanen.',
         ], 200);
+    }
+
+    /**
+     * Revoke the verification of a verified document (Manager only).
+     */
+    #[OA\Post(
+        path: '/api/documents/{id}/revoke-verification',
+        operationId: 'revokeDocumentVerification',
+        summary: 'Revoke Document Verification (Manager only)',
+        description: "Membatalkan verifikasi dokumen yang sudah `terverifikasi` (Manager only).\n\nStatus dokumen dikembalikan ke `menunggu verifikasi` dan seluruh metadata verifikasi (verifier, waktu verifikasi, catatan) dibersihkan, sehingga uploader dapat merevisi dokumen dan QC/Manager dapat memverifikasi ulang.",
+        security: [['cookieAuth' => []]],
+        tags: ['Documents'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'Document ID', schema: new OA\Schema(type: 'integer', example: 1)),
+        ],
+        requestBody: new OA\RequestBody(
+            required: false,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'reason', type: 'string', maxLength: 500, example: 'Dokumen salah unggah, perlu diperbaiki oleh uploader.', description: 'Alasan pembatalan verifikasi (opsional)'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Verifikasi dokumen berhasil dibatalkan', content: new OA\JsonContent(ref: '#/components/schemas/DocumentResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Unauthenticated.')])),
+            new OA\Response(response: 403, description: 'Forbidden - hanya Manager', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'This action is unauthorized.')])),
+            new OA\Response(response: 404, description: 'Not Found', content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string', example: 'Not Found.')])),
+            new OA\Response(response: 422, description: 'Dokumen tidak berstatus terverifikasi', content: new OA\JsonContent(ref: '#/components/schemas/ValidationError')),
+        ]
+    )]
+    public function revokeVerification(Request $request, Document $document): JsonResponse
+    {
+        $this->authorize('revokeVerification', $document);
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ], [
+            'reason.max' => 'Alasan pembatalan maksimal 500 karakter.',
+        ]);
+
+        try {
+            $revoked = $this->documentService->revokeVerification(
+                $document,
+                (int) auth()->id(),
+                $validated['reason'] ?? null
+            );
+
+            return response()->json([
+                'message' => 'Verifikasi dokumen berhasil dibatalkan. Status dikembalikan ke menunggu verifikasi.',
+                'data' => new DocumentResource($revoked),
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
+        }
     }
 }
 

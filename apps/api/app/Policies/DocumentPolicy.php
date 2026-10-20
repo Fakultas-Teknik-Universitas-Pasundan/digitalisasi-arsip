@@ -19,11 +19,30 @@ class DocumentPolicy
 
     /**
      * Determine whether the user can view the document.
+     *
+     * SBAP can only view metadata of VERIFIED documents (Fase-1 business decision).
+     * Manager/QC/Uploader keep prior behavior.
      */
     public function view(User $user, Document $document): bool
     {
-        // All authenticated users can view documents
+        // SBAP: only verified documents
+        if ($user->hasRole('sbap')) {
+            return $document->status === DocumentStatus::VERIFIED;
+        }
+
+        // All other authenticated roles can view documents
         return true;
+    }
+
+    /**
+     * Determine whether the user can view document statistics.
+     *
+     * Manager, QC & Uploader (Uploader keeps pre-Fase-1 behavior).
+     * SBAP is blocked until a business need is confirmed.
+     */
+    public function viewStatistics(User $user): bool
+    {
+        return $user->hasAnyRole(['manager', 'qc', 'uploader']);
     }
 
     /**
@@ -81,6 +100,19 @@ class DocumentPolicy
 
         // Uploader can only delete their own rejected documents
         return $document->uploaded_by === $user->id;
+    }
+
+    /**
+     * Determine whether the user can revoke the verification of a document.
+     * 
+     * Note: This only checks if user has the ROLE to revoke.
+     * Business logic (document status) is checked in DocumentService
+     * to return proper 422 error instead of 403.
+     */
+    public function revokeVerification(User $user, Document $document): bool
+    {
+        // Only manager can revoke verification
+        return $user->hasRole('manager');
     }
 
     /**

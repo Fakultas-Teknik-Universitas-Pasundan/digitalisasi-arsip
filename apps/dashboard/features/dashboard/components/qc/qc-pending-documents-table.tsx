@@ -25,7 +25,7 @@ interface QCPendingDocumentsTableProps {
   onRefresh: () => void;
   onVerify: (args: {
     id: number;
-    status: "verified" | "rejected";
+    status: "terverifikasi" | "tidak terverifikasi";
     note?: string;
   }) => void;
   isVerifying: boolean;
@@ -81,11 +81,11 @@ export function QCPendingDocumentsTable({
   }, [pendingDocs]);
 
   const handleConfirmVerify = (id: number, note?: string) => {
-    onVerify({ id, status: "verified", note });
+    onVerify({ id, status: "terverifikasi", note });
   };
 
   const handleConfirmReject = (id: number, reason: string) => {
-    onVerify({ id, status: "rejected", note: reason });
+    onVerify({ id, status: "tidak terverifikasi", note: reason });
   };
 
   return (

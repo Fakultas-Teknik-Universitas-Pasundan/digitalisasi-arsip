@@ -21,13 +21,13 @@ export function useQCDashboard() {
       note,
     }: {
       id: number;
-      status: "verified" | "rejected";
+      status: "terverifikasi" | "tidak terverifikasi";
       note?: string;
     }) =>
       dashboardService.verifyDocument(id, { status, verification_note: note }),
     onSuccess: (res, variables) => {
       toast.success(
-        variables.status === "verified"
+        variables.status === "terverifikasi"
           ? "Dokumen berhasil diverifikasi!"
           : "Dokumen ditolak.",
       );

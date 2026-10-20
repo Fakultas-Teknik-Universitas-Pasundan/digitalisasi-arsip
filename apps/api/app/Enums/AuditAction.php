@@ -10,6 +10,7 @@ enum AuditAction: string
     case UPLOAD_DOCUMENT = 'upload_document';
     case VERIFY_DOCUMENT = 'verify_document';
     case REJECT_DOCUMENT = 'reject_document';
+    case REVOKE_VERIFICATION = 'revoke_verification';
     case UPDATE_DOCUMENT = 'update_document';
     case DELETE_DOCUMENT = 'delete_document';
     case DOWNLOAD_DOCUMENT = 'download_document';
@@ -31,6 +32,7 @@ enum AuditAction: string
             self::UPLOAD_DOCUMENT => 'Unggah',
             self::VERIFY_DOCUMENT => 'Verifikasi',
             self::REJECT_DOCUMENT => 'Tolak',
+            self::REVOKE_VERIFICATION => 'Batalkan Verifikasi',
             self::UPDATE_DOCUMENT => 'Update Dokumen',
             self::DELETE_DOCUMENT => 'Hapus Dokumen',
             self::DOWNLOAD_DOCUMENT => 'Unduh',
@@ -49,7 +51,7 @@ enum AuditAction: string
     {
         return match ($this) {
             self::VERIFY_DOCUMENT, self::CREATE_USER, self::LOGIN => 'success',
-            self::REJECT_DOCUMENT, self::DELETE_USER, self::DELETE_DOCUMENT => 'danger',
+            self::REJECT_DOCUMENT, self::DELETE_USER, self::DELETE_DOCUMENT, self::REVOKE_VERIFICATION => 'danger',
             self::UPLOAD_DOCUMENT, self::UPDATE_USER, self::UPDATE_DOCUMENT, self::UPDATE_SETTINGS => 'primary',
             self::CREATE_PRODI => 'info',
             default => 'secondary',

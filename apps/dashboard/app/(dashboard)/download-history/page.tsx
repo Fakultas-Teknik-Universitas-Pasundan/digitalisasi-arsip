@@ -45,7 +45,7 @@ export default function DownloadHistoryPage() {
 
   // Directly fetch verified documents from API
   const docsQuery = useQuery(
-    dashboardQueries.documents({ status: "verified", per_page: 50 }),
+    dashboardQueries.documents({ status: "terverifikasi", per_page: 50 }),
   );
   const isLoading = docsQuery.isLoading;
 
